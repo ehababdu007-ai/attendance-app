@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>نظام تسجيل الحضور السريع</title>
+  <title>نظام تسجيل الحضور والاختبارات</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     :root { --primary-color: #0d9488; --bg-color: #f1f5f9; --card-bg: #ffffff; }
@@ -38,15 +38,16 @@
       display: none;
     }
 
-    .input-group { margin-bottom: 12px; }
-    label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #475569; }
-    input[type="text"] { width: 100%; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; outline: none; }
-    .btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
-    #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 230px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .input-group { margin-bottom: 10px; }
+    label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
+    input[type="text"] { width: 100%; padding: 9px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; }
+    .btn { width: 100%; padding: 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
+    #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 220px; }
     
     #student-card {
-      margin-top: 15px;
-      padding: 16px;
+      margin-top: 12px;
+      padding: 14px;
       border-radius: 12px;
       display: none;
       text-align: center;
@@ -56,9 +57,9 @@
     .card-warning { background-color: #fef3c7; border: 2px solid #f59e0b; color: #92400e; }
     .card-error { background-color: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
 
-    .student-name { font-size: 20px; font-weight: bold; margin-bottom: 6px; }
-    .student-details { font-size: 14px; opacity: 0.9; margin-bottom: 4px; }
-    .status-msg { font-size: 13px; font-weight: 600; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.15); }
+    .student-name { font-size: 19px; font-weight: bold; margin-bottom: 4px; }
+    .student-details { font-size: 13px; opacity: 0.9; margin-bottom: 4px; }
+    .status-msg { font-size: 12px; font-weight: 600; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); }
 
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
@@ -69,7 +70,7 @@
 <body>
 
 <div class="container">
-  <h3 class="title">نظام تسجيل الحضور السريع</h3>
+  <h3 class="title">نظام تسجيل الحضور والاختبارات</h3>
 
   <div class="status-bar">
     <span id="net-status" class="status-online">🌐 متصل بالإنترنت</span>
@@ -79,12 +80,23 @@
   <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
 
   <div class="input-group">
-    <label>اسم الجلسة / المحاضرة:</label>
-    <input type="text" id="sessionName" value="محاضرة اليوم">
+    <label>اسم الجلسة / المحاضرة / الاختبار:</label>
+    <input type="text" id="sessionName" value="امتحان الحصة">
+  </div>
+
+  <div class="grid-2">
+    <div class="input-group">
+      <label>اسم القاعة:</label>
+      <input type="text" id="hallName" placeholder="مثال: قاعة A" onchange="saveInputState()">
+    </div>
+    <div class="input-group">
+      <label>المساعد / الجهاز:</label>
+      <input type="text" id="deviceInfo" placeholder="مثال: جهاز 1" onchange="saveInputState()">
+    </div>
   </div>
 
   <div class="input-group">
-    <label>إدخال يدوي أو القارئ الخارجي:</label>
+    <label>إدخال يدوي أو قارئ الباركود:</label>
     <div style="display: flex; gap: 8px;">
       <input type="text" id="manualCode" placeholder="أدخل كود الطالب...">
       <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
@@ -140,6 +152,7 @@
   }
 
   window.onload = function() {
+    loadInputState();
     loadCachedStudents();
     loadTodayScanned();
     fetchStudentsList();
@@ -149,6 +162,18 @@
     window.addEventListener('online', updateUI);
     window.addEventListener('offline', updateUI);
   };
+
+  function saveInputState() {
+    localStorage.setItem('saved_hallName', document.getElementById('hallName').value);
+    localStorage.setItem('saved_deviceInfo', document.getElementById('deviceInfo').value);
+  }
+
+  function loadInputState() {
+    const savedHall = localStorage.getItem('saved_hallName');
+    const savedDevice = localStorage.getItem('saved_deviceInfo');
+    if (savedHall) document.getElementById('hallName').value = savedHall;
+    if (savedDevice) document.getElementById('deviceInfo').value = savedDevice;
+  }
 
   function updateUI() {
     const isOnline = navigator.onLine;
@@ -242,11 +267,12 @@
     isProcessing = true;
     const cleanCode = String(code).trim();
     const session = document.getElementById('sessionName').value.trim();
-    const scanKey = cleanCode + "_" + session;
+    const hall = document.getElementById('hallName').value.trim();
+    const device = document.getElementById('deviceInfo').value.trim();
 
+    const scanKey = cleanCode + "_" + session;
     const student = studentsData[cleanCode];
 
-    // 1. الطالب غير موجود
     if (!student) {
       playBeep('error');
       showCard("❌ كود غير مسجل", "الكود الممسوح: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
@@ -254,7 +280,6 @@
       return;
     }
 
-    // 2. منع التكرار اللحظي
     if (scannedToday.has(scanKey)) {
       playBeep('warning');
       showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
@@ -262,7 +287,6 @@
       return;
     }
 
-    // 3. مسح جديد ناجح وصحيح (إظهار فوري بالسرعة القصوى)
     playBeep('success');
     recordLocalScan(scanKey);
 
@@ -274,19 +298,18 @@
 
     showCard(
       "✅ " + student.name,
-      "الكود: " + student.code + " | الصف: " + student.grade + " | المجموعة: " + student.group,
-      "تم تسجيل الحضور الساعة " + timeStr,
+      "الصف: " + student.grade + " | المجموعة: " + student.group + "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
+      "تم التسجيل بنجاح الساعة " + timeStr,
       "success"
     );
 
-    const scanRecord = { code: cleanCode, sessionName: session, timestamp: timeStr };
+    const scanRecord = { code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr };
 
-    // المعالجة والإرسال في الخلفية لضمان الاستجابة اللحظية
     if (navigator.onLine) {
       fetch(SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "recordScan", code: cleanCode, sessionName: session, timestamp: timeStr })
+        body: JSON.stringify({ action: "recordScan", code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr })
       }).catch(err => {
         storeLocally(scanRecord);
       });
@@ -338,7 +361,7 @@
   function showCard(name, info, status, type) {
     const card = document.getElementById('student-card');
     document.getElementById('card-name').innerText = name;
-    document.getElementById('card-info').innerText = info;
+    document.getElementById('card-info').innerHTML = info;
     document.getElementById('card-status').innerText = status;
 
     card.className = "card-" + type;
