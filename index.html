@@ -6,24 +6,43 @@
   <title>نظام تسجيل الحضور بالباركود</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    :root { --primary-color: #0d9488; --bg-color: #f8fafc; --card-bg: #ffffff; }
-    body { font-family: system-ui, sans-serif; background-color: var(--bg-color); margin: 0; padding: 12px; direction: rtl; }
-    .container { max-width: 480px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    :root { --primary-color: #0d9488; --bg-color: #f1f5f9; --card-bg: #ffffff; }
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 12px; direction: rtl; }
+    .container { max-width: 480px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+    .title { text-align: center; margin: 0 0 15px 0; color: #0f172a; font-size: 20px; font-weight: 800; }
     .input-group { margin-bottom: 12px; }
-    label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
-    input[type="text"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
-    .btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
-    #reader { width: 100%; margin-top: 15px; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px; }
-    #alert-box { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; font-weight: bold; text-align: center; }
-    .alert-success { background: #d1fae5; color: #065f46; }
-    .alert-error { background: #fee2e2; color: #991b1b; }
-    .alert-warning { background: #fef3c7; color: #92400e; }
+    label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #475569; }
+    input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; outline: none; }
+    input[type="text"]:focus { border-color: var(--primary-color); }
+    .btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    #reader { width: 100%; margin-top: 15px; border-radius: 12px; overflow: hidden; background: #000; min-height: 250px; }
+    
+    #student-card {
+      margin-top: 15px;
+      padding: 16px;
+      border-radius: 12px;
+      display: none;
+      text-align: center;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+    .card-success { background-color: #d1fae5; border: 2px solid #10b981; color: #065f46; }
+    .card-warning { background-color: #fef3c7; border: 2px solid #f59e0b; color: #92400e; }
+    .card-error { background-color: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
+
+    .student-name { font-size: 20px; font-weight: bold; margin-bottom: 6px; }
+    .student-details { font-size: 14px; opacity: 0.9; margin-bottom: 4px; }
+    .status-msg { font-size: 13px; font-weight: 600; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.15); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h3 style="text-align: center; margin-top: 0;">نظام الحضور المباشر</h3>
+  <h3 class="title">نظام تسجيل الحضور بالباركود</h3>
 
   <div class="input-group">
     <label>اسم الجلسة / المحاضرة:</label>
@@ -31,20 +50,24 @@
   </div>
 
   <div class="input-group">
-    <label>إدخال يدوي:</label>
+    <label>إدخال يدوي أو القارئ الخارجي:</label>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="manualCode" placeholder="أدخل الكود...">
-      <button class="btn" onclick="processManual()" style="width: 30%;">تسجيل</button>
+      <input type="text" id="manualCode" placeholder="أدخل كود الطالب...">
+      <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
     </div>
   </div>
 
   <div id="reader"></div>
-  <div id="alert-box"></div>
+
+  <div id="student-card">
+    <div class="student-name" id="card-name">--</div>
+    <div class="student-details" id="card-info">--</div>
+    <div class="status-msg" id="card-status">--</div>
+  </div>
 </div>
 
 <script>
-  // ضع رابط Web App URL الخاص بك من Google Apps Script هنا
-  const SCRIPT_URL = "ضع_رابط_WEB_APP_هنا";
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzn3THPIqzLOrHsoIAY3LKSn-FfiTmt02R38huQ-75b_UqyyN_K9KZuGuuJi0niwaWzLw/exec";
 
   let html5QrcodeScanner;
   let isProcessing = false;
@@ -68,39 +91,59 @@
   }
 
   function processManual() {
-    const code = document.getElementById('manualCode').value.trim();
+    const codeInput = document.getElementById('manualCode');
+    const code = codeInput.value.trim();
     if (code) {
       handleScan(code);
-      document.getElementById('manualCode').value = '';
+      codeInput.value = '';
     }
   }
 
   function handleScan(code) {
     isProcessing = true;
     const session = document.getElementById('sessionName').value.trim();
-    showAlert("جاري تسجيل الكود: " + code, "warning");
+    showCard("جاري الاستعلام وتسجيل الحضور...", "الكود: " + code, "جاري الاتصال بالسيرفر...", "warning");
 
     fetch(SCRIPT_URL, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: "recordScan", code: code, sessionName: session })
     })
-    .then(() => {
-      showAlert("✅ تم إرسال الكود: " + code, "success");
-      setTimeout(() => { isProcessing = false; }, 2000);
+    .then(response => response.json())
+    .then(res => {
+      if (res.success) {
+        showCard(
+          "✅ " + res.student.name,
+          "الكود: " + res.student.code + " | الصف: " + res.student.grade + " | المجموعة: " + res.student.group,
+          "تم تسجيل الحضور بنجاح الساعة " + res.timestamp,
+          "success"
+        );
+      } else if (res.duplicate) {
+        showCard(
+          "⚠️️ " + res.student.name,
+          "الكود: " + res.student.code + " | الصف: " + res.student.grade,
+          res.message,
+          "warning"
+        );
+      } else {
+        showCard("❌ كود غير مسجل", "الكود الممسوح: " + code, res.message, "error");
+      }
+      setTimeout(() => { isProcessing = false; }, 2500);
     })
     .catch(err => {
-      showAlert("❌ خطأ في الاتصال: " + err, "error");
-      isProcessing = false;
+      showCard("❌ خطأ في الشبكة", "الكود: " + code, "تعذر الاتصال بقاعدة البيانات: " + err, "error");
+      setTimeout(() => { isProcessing = false; }, 2000);
     });
   }
 
-  function showAlert(msg, type) {
-    const box = document.getElementById('alert-box');
-    box.className = "alert-" + type;
-    box.innerText = msg;
-    box.style.display = "block";
+  function showCard(name, info, status, type) {
+    const card = document.getElementById('student-card');
+    document.getElementById('card-name').innerText = name;
+    document.getElementById('card-info').innerText = info;
+    document.getElementById('card-status').innerText = status;
+
+    card.className = "card-" + type;
+    card.style.display = "block";
   }
 </script>
 
