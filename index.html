@@ -122,9 +122,9 @@
   let scannedToday = new Set();
   let audioCtx = null;
 
-  // المتغيرات الخاصة بالتقاط السكانر السريع (Global Scanner Buffer)
+  // إعدادات البافر الشاملة للسكانر
   let scanBuffer = "";
-  let lastKeyTime = Date.now();
+  let scanTimeout = null;
 
   function playBeep(type = 'success') {
     try {
@@ -169,40 +169,26 @@
     window.addEventListener('online', updateUI);
     window.addEventListener('offline', updateUI);
 
-    // 1. معالجة الإدخال اليدوي أو ضغطة Enter من الخانة
     const manualInput = document.getElementById('manualCode');
-    manualInput.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
+
+    // الاستماع لكل الإدخالات في خانة النص (يدوي + سكانر)
+    manualInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         processManual();
       }
     });
 
-    // 2. معالج التقاط قراءة السكانر اللحظية من أي مكان بالصفحة
-    document.addEventListener('keydown', function(e) {
-      const activeEl = document.activeElement;
-      // تجاهل إذا كان المستخدم يكتب في اسم المحاضرة أو القاعة أو الجهاز
-      if (activeEl && (activeEl.id === 'sessionName' || activeEl.id === 'hallName' || activeEl.id === 'deviceInfo')) {
-        return;
-      }
-
-      const currentTime = Date.now();
+    // مراقبة التغيرات المباشرة لمعالجة السكانر السريع عبر المؤقت الزمني
+    manualInput.addEventListener('input', function(e) {
+      clearTimeout(scanTimeout);
+      const val = manualInput.value.trim();
       
-      // إذا كان الفرق بين الضغطات كبيراً، اعتبرها كتابة يدوية جديدة وافرغ البافر
-      if (currentTime - lastKeyTime > 100) {
-        scanBuffer = "";
-      }
-      lastKeyTime = currentTime;
-
-      if (e.key === 'Enter') {
-        if (scanBuffer.length >= 2) {
-          e.preventDefault();
-          handleScan(scanBuffer.trim());
-          scanBuffer = "";
-          manualInput.value = "";
-        }
-      } else if (e.key.length === 1) {
-        scanBuffer += e.key;
+      // إذا أدخل السكانر أكثر من حرفين بسرعة، يكتشفها النظام ويفعل التسجيل بعد 50 مللي ثانية من التوقف
+      if (val.length >= 2) {
+        scanTimeout = setTimeout(() => {
+          processManual();
+        }, 50);
       }
     });
   };
