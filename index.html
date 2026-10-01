@@ -121,8 +121,10 @@
   let studentsData = {};
   let scannedToday = new Set();
   let audioCtx = null;
-  let barcodeBuffer = "";
-  let barcodeTimer = null;
+
+  // المتغيرات الخاصة بالتقاط السكانر السريع (Global Scanner Buffer)
+  let scanBuffer = "";
+  let lastKeyTime = Date.now();
 
   function playBeep(type = 'success') {
     try {
@@ -162,38 +164,45 @@
     updateUI();
     startCameraScanner();
 
-    // التركيز التلقائي لخانة السكنر
     focusScannerInput();
 
     window.addEventListener('online', updateUI);
     window.addEventListener('offline', updateUI);
 
-    // الاستماع لزر Enter من جهاز السكنر في خانة الإدخال
+    // 1. معالجة الإدخال اليدوي أو ضغطة Enter من الخانة
     const manualInput = document.getElementById('manualCode');
-    manualInput.addEventListener('keydown', function(e) {
+    manualInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         processManual();
       }
     });
 
-    // الاستماع للضغطات العشوائية في الصفحة التقاطاً للسكانر من أي مكان
+    // 2. معالج التقاط قراءة السكانر اللحظية من أي مكان بالصفحة
     document.addEventListener('keydown', function(e) {
       const activeEl = document.activeElement;
+      // تجاهل إذا كان المستخدم يكتب في اسم المحاضرة أو القاعة أو الجهاز
       if (activeEl && (activeEl.id === 'sessionName' || activeEl.id === 'hallName' || activeEl.id === 'deviceInfo')) {
-        return; // لا تلتقط إذا كان يكتب في اسم القاعة أو المحاضرة
+        return;
       }
 
+      const currentTime = Date.now();
+      
+      // إذا كان الفرق بين الضغطات كبيراً، اعتبرها كتابة يدوية جديدة وافرغ البافر
+      if (currentTime - lastKeyTime > 100) {
+        scanBuffer = "";
+      }
+      lastKeyTime = currentTime;
+
       if (e.key === 'Enter') {
-        if (barcodeBuffer.trim().length > 0) {
-          handleScan(barcodeBuffer.trim());
-          barcodeBuffer = "";
+        if (scanBuffer.length >= 2) {
+          e.preventDefault();
+          handleScan(scanBuffer.trim());
+          scanBuffer = "";
           manualInput.value = "";
         }
       } else if (e.key.length === 1) {
-        barcodeBuffer += e.key;
-        clearTimeout(barcodeTimer);
-        barcodeTimer = setTimeout(() => { barcodeBuffer = ""; }, 200); // إغلاق البافر إذا توقف الإدخال
+        scanBuffer += e.key;
       }
     });
   };
@@ -317,14 +326,14 @@
     if (!student) {
       playBeep('error');
       showCard("❌ كود غير مسجل", "الكود الممسوح: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
       return;
     }
 
     if (scannedToday.has(scanKey)) {
       playBeep('warning');
       showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
       return;
     }
 
@@ -358,7 +367,7 @@
       storeLocally(scanRecord);
     }
 
-    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
+    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
   }
 
   function storeLocally(record) {
