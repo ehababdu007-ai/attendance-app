@@ -3,19 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>نظام تسجيل الحضور بالباركود</title>
+  <title>نظام تسجيل الحضور بالباركود (مع الصوت)</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     :root { --primary-color: #0d9488; --bg-color: #f1f5f9; --card-bg: #ffffff; }
     body { font-family: system-ui, -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 12px; direction: rtl; }
     .container { max-width: 480px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
-    .title { text-align: center; margin: 0 0 15px 0; color: #0f172a; font-size: 20px; font-weight: 800; }
+    .title { text-align: center; margin: 0 0 10px 0; color: #0f172a; font-size: 20px; font-weight: 800; }
+    
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #e2e8f0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .status-online { color: #059669; }
+    .status-offline { color: #dc2626; }
+    
+    .sync-btn {
+      width: 100%;
+      padding: 10px;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 12px;
+      display: none;
+    }
+
     .input-group { margin-bottom: 12px; }
     label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; color: #475569; }
-    input[type="text"] { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; outline: none; }
-    input[type="text"]:focus { border-color: var(--primary-color); }
+    input[type="text"] { width: 100%; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 15px; outline: none; }
     .btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
-    #reader { width: 100%; margin-top: 15px; border-radius: 12px; overflow: hidden; background: #000; min-height: 250px; }
+    #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 230px; }
     
     #student-card {
       margin-top: 15px;
@@ -44,6 +71,13 @@
 <div class="container">
   <h3 class="title">نظام تسجيل الحضور بالباركود</h3>
 
+  <div class="status-bar">
+    <span id="net-status" class="status-online">🌐 متصل بالإنترنت</span>
+    <span id="pending-count">📋 معلق: 0</span>
+  </div>
+
+  <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
+
   <div class="input-group">
     <label>اسم الجلسة / المحاضرة:</label>
     <input type="text" id="sessionName" value="محاضرة اليوم">
@@ -71,10 +105,97 @@
 
   let html5QrcodeScanner;
   let isProcessing = false;
+  let studentsData = {};
+  let audioCtx = null;
+
+  // إعداد محرك الصوت
+  function playBeep(type = 'success') {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      if (type === 'success') {
+        osc.frequency.value = 880; // نغمة عالية وسريعة للنجاح
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+      } else {
+        osc.frequency.value = 300; // نغمة منخفضة للخطأ
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      }
+    } catch (e) {
+      console.log("Audio play error:", e);
+    }
+  }
 
   window.onload = function() {
+    loadCachedStudents();
+    fetchStudentsList();
+    updateUI();
     startCameraScanner();
+
+    window.addEventListener('online', updateUI);
+    window.addEventListener('offline', updateUI);
   };
+
+  function updateUI() {
+    const isOnline = navigator.onLine;
+    const netStatus = document.getElementById('net-status');
+    const syncBtn = document.getElementById('sync-btn');
+    const pending = getPendingScans();
+
+    document.getElementById('pending-count').innerText = "📋 معلق: " + pending.length;
+
+    if (isOnline) {
+      netStatus.className = "status-online";
+      netStatus.innerText = "🌐 متصل بالإنترنت";
+      syncBtn.style.display = pending.length > 0 ? "block" : "none";
+    } else {
+      netStatus.className = "status-offline";
+      netStatus.innerText = "📡 بدون إنترنت (أوفلاين)";
+      syncBtn.style.display = "none";
+    }
+  }
+
+  function fetchStudentsList() {
+    if (!navigator.onLine) return;
+    fetch(SCRIPT_URL + "?action=getStudents")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.students) {
+          const map = {};
+          data.students.forEach(s => { map[String(s.code).trim()] = s; });
+          studentsData = map;
+          localStorage.setItem('cached_students', JSON.stringify(map));
+        }
+      })
+      .catch(err => console.log("تعذر تحديث قائمة الطلاب:", err));
+  }
+
+  function loadCachedStudents() {
+    const cached = localStorage.getItem('cached_students');
+    if (cached) {
+      try { studentsData = JSON.parse(cached); } catch(e){}
+    }
+  }
+
+  function getPendingScans() {
+    const list = localStorage.getItem('pending_scans');
+    return list ? JSON.parse(list) : [];
+  }
+
+  function savePendingScans(scans) {
+    localStorage.setItem('pending_scans', JSON.stringify(scans));
+    updateUI();
+  }
 
   function startCameraScanner() {
     html5QrcodeScanner = new Html5QrcodeScanner(
@@ -101,38 +222,95 @@
 
   function handleScan(code) {
     isProcessing = true;
+    const cleanCode = String(code).trim();
     const session = document.getElementById('sessionName').value.trim();
-    showCard("جاري الاستعلام وتسجيل الحضور...", "الكود: " + code, "جاري الاتصال بالسيرفر...", "warning");
+    const now = new Date();
+    const timeStr = now.getFullYear() + "-" + 
+                    String(now.getMonth()+1).padStart(2,'0') + "-" + 
+                    String(now.getDate()).padStart(2,'0') + " " + 
+                    now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const student = studentsData[cleanCode];
+
+    if (!student) {
+      playBeep('error'); // صوت الخطأ
+      showCard("❌ كود غير مسجل", "الكود الممسوح: " + cleanCode, "هذا الطالب غير مسجل في الكشوفات!", "error");
+      setTimeout(() => { isProcessing = false; }, 2000);
+      return;
+    }
+
+    // إصدار صوت نجاح المسح فوراً
+    playBeep('success');
+
+    const scanRecord = { code: cleanCode, sessionName: session, timestamp: timeStr };
+
+    if (navigator.onLine) {
+      showCard("جاري تسجيل الحضور...", student.name, "جاري الإرسال للشيت...", "warning");
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "recordScan", code: cleanCode, sessionName: session, timestamp: timeStr })
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          showCard("✅ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade + " | المجموعة: " + student.group, "تم التسجيل المباشر بنجاح الساعة " + timeStr, "success");
+        } else {
+          showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, res.message, "warning");
+        }
+        setTimeout(() => { isProcessing = false; }, 2000);
+      })
+      .catch(err => {
+        storeLocallyAndNotify(scanRecord, student, timeStr);
+      });
+    } else {
+      storeLocallyAndNotify(scanRecord, student, timeStr);
+    }
+  }
+
+  function storeLocallyAndNotify(record, student, timeStr) {
+    const pending = getPendingScans();
+    pending.push(record);
+    savePendingScans(pending);
+
+    showCard(
+      "✅ " + student.name + " (أوفلاين)",
+      "الكود: " + student.code + " | الصف: " + student.grade + " | المجموعة: " + student.group,
+      "تم الحفظ محلياً في الهاتف الساعة " + timeStr,
+      "success"
+    );
+    setTimeout(() => { isProcessing = false; }, 2000);
+  }
+
+  function syncPendingScans() {
+    const pending = getPendingScans();
+    if (pending.length === 0) return;
+
+    const syncBtn = document.getElementById('sync-btn');
+    syncBtn.innerText = "⏳ جاري الرفع إلى Google Sheets...";
+    syncBtn.disabled = true;
 
     fetch(SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "recordScan", code: code, sessionName: session })
+      body: JSON.stringify({ action: "syncBatch", scans: pending })
     })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(res => {
       if (res.success) {
-        showCard(
-          "✅ " + res.student.name,
-          "الكود: " + res.student.code + " | الصف: " + res.student.grade + " | المجموعة: " + res.student.group,
-          "تم تسجيل الحضور بنجاح الساعة " + res.timestamp,
-          "success"
-        );
-      } else if (res.duplicate) {
-        showCard(
-          "⚠️️ " + res.student.name,
-          "الكود: " + res.student.code + " | الصف: " + res.student.grade,
-          res.message,
-          "warning"
-        );
+        savePendingScans([]);
+        alert("🎉 تم رفع كافة سجلات الحضور المعلقة بنجاح!");
       } else {
-        showCard("❌ كود غير مسجل", "الكود الممسوح: " + code, res.message, "error");
+        alert("حدث خطأ أثناء الرفع: " + res.message);
       }
-      setTimeout(() => { isProcessing = false; }, 2500);
+      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
+      syncBtn.disabled = false;
+      updateUI();
     })
     .catch(err => {
-      showCard("❌ خطأ في الشبكة", "الكود: " + code, "تعذر الاتصال بقاعدة البيانات: " + err, "error");
-      setTimeout(() => { isProcessing = false; }, 2000);
+      alert("❌ تعذر الرفع، يرجى التأكد من جودة الاتصال بالإنترنت.");
+      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
+      syncBtn.disabled = false;
     });
   }
 
