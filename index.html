@@ -42,6 +42,7 @@
     .input-group { margin-bottom: 10px; }
     label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
     input[type="text"] { width: 100%; padding: 9px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; }
+    input[type="text"]:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2); }
     .btn { width: 100%; padding: 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
     #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 220px; }
     
@@ -96,9 +97,9 @@
   </div>
 
   <div class="input-group">
-    <label>إدخال يدوي أو قارئ الباركود:</label>
+    <label>إدخال يدوي أو قارئ الباركود (السكانر):</label>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="manualCode" placeholder="أدخل كود الطالب...">
+      <input type="text" id="manualCode" placeholder="وجه السكانر هنا أو أدخل الكود..." autofocus autocomplete="off">
       <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
     </div>
   </div>
@@ -120,6 +121,8 @@
   let studentsData = {};
   let scannedToday = new Set();
   let audioCtx = null;
+  let barcodeBuffer = "";
+  let barcodeTimer = null;
 
   function playBeep(type = 'success') {
     try {
@@ -159,9 +162,46 @@
     updateUI();
     startCameraScanner();
 
+    // التركيز التلقائي لخانة السكنر
+    focusScannerInput();
+
     window.addEventListener('online', updateUI);
     window.addEventListener('offline', updateUI);
+
+    // الاستماع لزر Enter من جهاز السكنر في خانة الإدخال
+    const manualInput = document.getElementById('manualCode');
+    manualInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        processManual();
+      }
+    });
+
+    // الاستماع للضغطات العشوائية في الصفحة التقاطاً للسكانر من أي مكان
+    document.addEventListener('keydown', function(e) {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.id === 'sessionName' || activeEl.id === 'hallName' || activeEl.id === 'deviceInfo')) {
+        return; // لا تلتقط إذا كان يكتب في اسم القاعة أو المحاضرة
+      }
+
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.trim().length > 0) {
+          handleScan(barcodeBuffer.trim());
+          barcodeBuffer = "";
+          manualInput.value = "";
+        }
+      } else if (e.key.length === 1) {
+        barcodeBuffer += e.key;
+        clearTimeout(barcodeTimer);
+        barcodeTimer = setTimeout(() => { barcodeBuffer = ""; }, 200); // إغلاق البافر إذا توقف الإدخال
+      }
+    });
   };
+
+  function focusScannerInput() {
+    const input = document.getElementById('manualCode');
+    if (input) input.focus();
+  }
 
   function saveInputState() {
     localStorage.setItem('saved_hallName', document.getElementById('hallName').value);
@@ -260,6 +300,7 @@
     if (code) {
       handleScan(code);
       codeInput.value = '';
+      focusScannerInput();
     }
   }
 
@@ -276,14 +317,14 @@
     if (!student) {
       playBeep('error');
       showCard("❌ كود غير مسجل", "الكود الممسوح: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
-      setTimeout(() => { isProcessing = false; }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
       return;
     }
 
     if (scannedToday.has(scanKey)) {
       playBeep('warning');
       showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
-      setTimeout(() => { isProcessing = false; }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
       return;
     }
 
@@ -317,7 +358,7 @@
       storeLocally(scanRecord);
     }
 
-    setTimeout(() => { isProcessing = false; }, 1000);
+    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
   }
 
   function storeLocally(record) {
