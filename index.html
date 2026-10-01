@@ -1,1 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>نظام تسجيل الحضور بالباركود</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    :root { --primary-color: #0d9488; --bg-color: #f8fafc; --card-bg: #ffffff; }
+    body { font-family: system-ui, sans-serif; background-color: var(--bg-color); margin: 0; padding: 12px; direction: rtl; }
+    .container { max-width: 480px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    .input-group { margin-bottom: 12px; }
+    label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+    .btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+    #reader { width: 100%; margin-top: 15px; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px; }
+    #alert-box { margin-top: 12px; padding: 12px; border-radius: 8px; display: none; font-weight: bold; text-align: center; }
+    .alert-success { background: #d1fae5; color: #065f46; }
+    .alert-error { background: #fee2e2; color: #991b1b; }
+    .alert-warning { background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
 
+<div class="container">
+  <h3 style="text-align: center; margin-top: 0;">نظام الحضور المباشر</h3>
+
+  <div class="input-group">
+    <label>اسم الجلسة / المحاضرة:</label>
+    <input type="text" id="sessionName" value="محاضرة اليوم">
+  </div>
+
+  <div class="input-group">
+    <label>إدخال يدوي:</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="manualCode" placeholder="أدخل الكود...">
+      <button class="btn" onclick="processManual()" style="width: 30%;">تسجيل</button>
+    </div>
+  </div>
+
+  <div id="reader"></div>
+  <div id="alert-box"></div>
+</div>
+
+<script>
+  // ضع رابط Web App URL الخاص بك من Google Apps Script هنا
+  const SCRIPT_URL = "ضع_رابط_WEB_APP_هنا";
+
+  let html5QrcodeScanner;
+  let isProcessing = false;
+
+  window.onload = function() {
+    startCameraScanner();
+  };
+
+  function startCameraScanner() {
+    html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", 
+      { fps: 15, qrbox: { width: 250, height: 250 } }, 
+      false
+    );
+    html5QrcodeScanner.render(onScanSuccess);
+  }
+
+  function onScanSuccess(decodedText) {
+    if (isProcessing) return;
+    handleScan(decodedText);
+  }
+
+  function processManual() {
+    const code = document.getElementById('manualCode').value.trim();
+    if (code) {
+      handleScan(code);
+      document.getElementById('manualCode').value = '';
+    }
+  }
+
+  function handleScan(code) {
+    isProcessing = true;
+    const session = document.getElementById('sessionName').value.trim();
+    showAlert("جاري تسجيل الكود: " + code, "warning");
+
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "recordScan", code: code, sessionName: session })
+    })
+    .then(() => {
+      showAlert("✅ تم إرسال الكود: " + code, "success");
+      setTimeout(() => { isProcessing = false; }, 2000);
+    })
+    .catch(err => {
+      showAlert("❌ خطأ في الاتصال: " + err, "error");
+      isProcessing = false;
+    });
+  }
+
+  function showAlert(msg, type) {
+    const box = document.getElementById('alert-box');
+    box.className = "alert-" + type;
+    box.innerText = msg;
+    box.style.display = "block";
+  }
+</script>
+
+</body>
+</html>
