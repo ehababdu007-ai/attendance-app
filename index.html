@@ -45,7 +45,6 @@
     input[type="text"]:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2); }
     .btn { width: 100%; padding: 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
     
-    /* قائمة نتائج البحث بالاسم */
     .search-results-list {
       position: absolute;
       top: 100%;
@@ -90,6 +89,20 @@
     .student-details { font-size: 13px; opacity: 0.9; margin-bottom: 4px; }
     .status-msg { font-size: 12px; font-weight: 600; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); }
 
+    .undo-btn {
+      margin-top: 10px;
+      padding: 6px 14px;
+      background-color: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .undo-btn:hover { background-color: #dc2626; }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
@@ -130,7 +143,6 @@
       <input type="text" id="manualCode" placeholder="ابحث باسم الطالب أو الكود..." autofocus autocomplete="off">
       <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
     </div>
-    <!-- قائمة الاقتراحات المنسدلة للبحث بالاسم -->
     <div id="search-results" class="search-results-list"></div>
   </div>
 
@@ -140,6 +152,7 @@
     <div class="student-name" id="card-name">--</div>
     <div class="student-details" id="card-info">--</div>
     <div class="status-msg" id="card-status">--</div>
+    <div id="undo-container"></div>
   </div>
 </div>
 
@@ -207,7 +220,6 @@
       }
     });
 
-    // البحث المباشر بالاسم أو الكود
     manualInput.addEventListener('input', function(e) {
       clearTimeout(scanTimeout);
       const val = manualInput.value.trim();
@@ -217,10 +229,8 @@
         return;
       }
 
-      // إظهار قائمة البحث بالاسم/الكود
       renderSearchResults(val);
 
-      // إذا كان الإدخال عبارة عن كود رقمي وقادم من سكانر سريع
       if (/^\d+$/.test(val) && val.length >= 2) {
         scanTimeout = setTimeout(() => {
           if (studentsData[val]) {
@@ -231,7 +241,6 @@
       }
     });
 
-    // إخفاء القائمة المنسدلة عند الضغط في أي مكان خارجها
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.input-group')) {
         hideSearchResults();
@@ -243,11 +252,10 @@
     const resultsContainer = document.getElementById('search-results');
     const q = query.toLowerCase().trim();
     
-    // التصفية بالاسم أو بالكود
     const matches = studentsList.filter(s => 
       String(s.name).toLowerCase().includes(q) || 
       String(s.code).toLowerCase().includes(q)
-    ).slice(0, 8); // عرض أول 8 نتائج لسرعة الأداء
+    ).slice(0, 8);
 
     if (matches.length === 0) {
       hideSearchResults();
@@ -359,6 +367,12 @@
     localStorage.setItem(todayKey, JSON.stringify(Array.from(scannedToday)));
   }
 
+  function removeLocalScan(code) {
+    const todayKey = 'scanned_' + new Date().toISOString().slice(0,10);
+    scannedToday.delete(code);
+    localStorage.setItem(todayKey, JSON.stringify(Array.from(scannedToday)));
+  }
+
   function getPendingScans() {
     const list = localStorage.getItem('pending_scans');
     return list ? JSON.parse(list) : [];
@@ -388,7 +402,6 @@
     const inputVal = codeInput.value.trim();
     if (!inputVal) return;
 
-    // 1. إذا كان المدخل كود موجود مباشرة
     if (studentsData[inputVal]) {
       handleScan(inputVal);
       codeInput.value = '';
@@ -396,7 +409,6 @@
       return;
     }
 
-    // 2. إذا كتب جزءاً من الاسم أو الكود، نأخذ أول نتيجة مطابقة
     const q = inputVal.toLowerCase();
     const matched = studentsList.find(s => 
       String(s.name).toLowerCase().includes(q) || 
@@ -407,7 +419,7 @@
       handleScan(matched.code);
       codeInput.value = '';
     } else {
-      handleScan(inputVal); // سيعطي تنبيه أن الكود غير مسجل
+      handleScan(inputVal);
       codeInput.value = '';
     }
     focusScannerInput();
@@ -450,7 +462,8 @@
       "✅ " + student.name,
       "الصف: " + student.grade + " | المجموعة: " + student.group + "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
       "تم التسجيل بنجاح الساعة " + timeStr,
-      "success"
+      "success",
+      cleanCode
     );
 
     const scanRecord = { code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr };
@@ -468,6 +481,32 @@
     }
 
     setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
+  }
+
+  function undoScan(cleanCode) {
+    const session = document.getElementById('sessionName').value.trim();
+    const scanKey = cleanCode + "_" + session;
+
+    // 1. إزالة من الذاكرة المحلية
+    removeLocalScan(scanKey);
+
+    // 2. إزالة من السجلات المعلقة أوفلاين إن وجِدت
+    let pending = getPendingScans();
+    pending = pending.filter(item => !(item.code === cleanCode && item.sessionName === session));
+    savePendingScans(pending);
+
+    // 3. إرسال أمر الحذف إلى Google Sheets إن كان متصلاً
+    if (navigator.onLine) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "undoScan", code: cleanCode, sessionName: session })
+      }).catch(err => console.log("خطأ في التراجع:", err));
+    }
+
+    playBeep('warning');
+    showCard("↩️ تم التراجع", "الكود: " + cleanCode, "تم إلغاء تسجيل الحضور بنجاح ويمكن إعادة مسحه الآن.", "warning");
+    focusScannerInput();
   }
 
   function storeLocally(record) {
@@ -508,11 +547,19 @@
     });
   }
 
-  function showCard(name, info, status, type) {
+  function showCard(name, info, status, type, codeForUndo = null) {
     const card = document.getElementById('student-card');
+    const undoContainer = document.getElementById('undo-container');
+    
     document.getElementById('card-name').innerText = name;
     document.getElementById('card-info').innerHTML = info;
     document.getElementById('card-status').innerText = status;
+
+    if (type === 'success' && codeForUndo) {
+      undoContainer.innerHTML = `<button class="undo-btn" onclick="undoScan('${codeForUndo}')">↩️ تراجع عن التسجيل</button>`;
+    } else {
+      undoContainer.innerHTML = '';
+    }
 
     card.className = "card-" + type;
     card.style.display = "block";
