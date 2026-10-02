@@ -39,11 +39,39 @@
     }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .input-group { margin-bottom: 10px; }
+    .input-group { margin-bottom: 10px; position: relative; }
     label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
     input[type="text"] { width: 100%; padding: 9px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; }
     input[type="text"]:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2); }
     .btn { width: 100%; padding: 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
+    
+    /* قائمة نتائج البحث بالاسم */
+    .search-results-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: #ffffff;
+      border: 1.5px solid var(--primary-color);
+      border-radius: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+      margin-top: 4px;
+      display: none;
+    }
+    .search-item {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      text-align: right;
+      transition: background 0.15s;
+    }
+    .search-item:hover, .search-item:active { background-color: #ccfbf1; }
+    .search-item-name { font-size: 14px; font-weight: bold; color: #0f172a; }
+    .search-item-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+
     #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 220px; }
     
     #student-card {
@@ -97,11 +125,13 @@
   </div>
 
   <div class="input-group">
-    <label>إدخال يدوي أو قارئ الباركود (السكانر):</label>
+    <label>البحث باسم الطالب أو أدخل الكود / السكانر:</label>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="manualCode" placeholder="وجه السكانر هنا أو أدخل الكود..." autofocus autocomplete="off">
+      <input type="text" id="manualCode" placeholder="ابحث باسم الطالب أو الكود..." autofocus autocomplete="off">
       <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
     </div>
+    <!-- قائمة الاقتراحات المنسدلة للبحث بالاسم -->
+    <div id="search-results" class="search-results-list"></div>
   </div>
 
   <div id="reader"></div>
@@ -119,11 +149,9 @@
   let html5QrcodeScanner;
   let isProcessing = false;
   let studentsData = {};
+  let studentsList = [];
   let scannedToday = new Set();
   let audioCtx = null;
-
-  // إعدادات البافر الشاملة للسكانر
-  let scanBuffer = "";
   let scanTimeout = null;
 
   function playBeep(type = 'success') {
@@ -171,27 +199,87 @@
 
     const manualInput = document.getElementById('manualCode');
 
-    // الاستماع لكل الإدخالات في خانة النص (يدوي + سكانر)
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
+        hideSearchResults();
         processManual();
       }
     });
 
-    // مراقبة التغيرات المباشرة لمعالجة السكانر السريع عبر المؤقت الزمني
+    // البحث المباشر بالاسم أو الكود
     manualInput.addEventListener('input', function(e) {
       clearTimeout(scanTimeout);
       const val = manualInput.value.trim();
-      
-      // إذا أدخل السكانر أكثر من حرفين بسرعة، يكتشفها النظام ويفعل التسجيل بعد 50 مللي ثانية من التوقف
-      if (val.length >= 2) {
+
+      if (val.length === 0) {
+        hideSearchResults();
+        return;
+      }
+
+      // إظهار قائمة البحث بالاسم/الكود
+      renderSearchResults(val);
+
+      // إذا كان الإدخال عبارة عن كود رقمي وقادم من سكانر سريع
+      if (/^\d+$/.test(val) && val.length >= 2) {
         scanTimeout = setTimeout(() => {
-          processManual();
-        }, 50);
+          if (studentsData[val]) {
+            hideSearchResults();
+            processManual();
+          }
+        }, 80);
+      }
+    });
+
+    // إخفاء القائمة المنسدلة عند الضغط في أي مكان خارجها
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.input-group')) {
+        hideSearchResults();
       }
     });
   };
+
+  function renderSearchResults(query) {
+    const resultsContainer = document.getElementById('search-results');
+    const q = query.toLowerCase().trim();
+    
+    // التصفية بالاسم أو بالكود
+    const matches = studentsList.filter(s => 
+      String(s.name).toLowerCase().includes(q) || 
+      String(s.code).toLowerCase().includes(q)
+    ).slice(0, 8); // عرض أول 8 نتائج لسرعة الأداء
+
+    if (matches.length === 0) {
+      hideSearchResults();
+      return;
+    }
+
+    let html = '';
+    matches.forEach(s => {
+      html += `
+        <div class="search-item" onclick="selectStudentFromSearch('${s.code}')">
+          <div class="search-item-name">${s.name}</div>
+          <div class="search-item-meta">كود: ${s.code} | الصف: ${s.grade} | الموعد: ${s.group}</div>
+        </div>
+      `;
+    });
+
+    resultsContainer.innerHTML = html;
+    resultsContainer.style.display = 'block';
+  }
+
+  function selectStudentFromSearch(code) {
+    hideSearchResults();
+    document.getElementById('manualCode').value = code;
+    handleScan(code);
+    document.getElementById('manualCode').value = '';
+    focusScannerInput();
+  }
+
+  function hideSearchResults() {
+    const resultsContainer = document.getElementById('search-results');
+    if (resultsContainer) resultsContainer.style.display = 'none';
+  }
 
   function focusScannerInput() {
     const input = document.getElementById('manualCode');
@@ -236,18 +324,24 @@
       .then(data => {
         if (data.success && data.students) {
           const map = {};
+          studentsList = data.students;
           data.students.forEach(s => { map[String(s.code).trim()] = s; });
           studentsData = map;
           localStorage.setItem('cached_students', JSON.stringify(map));
+          localStorage.setItem('cached_students_list', JSON.stringify(data.students));
         }
       })
       .catch(err => console.log("تعذر تحديث الكشوفات:", err));
   }
 
   function loadCachedStudents() {
-    const cached = localStorage.getItem('cached_students');
-    if (cached) {
-      try { studentsData = JSON.parse(cached); } catch(e){}
+    const cachedMap = localStorage.getItem('cached_students');
+    const cachedArr = localStorage.getItem('cached_students_list');
+    if (cachedMap) {
+      try { studentsData = JSON.parse(cachedMap); } catch(e){}
+    }
+    if (cachedArr) {
+      try { studentsList = JSON.parse(cachedArr); } catch(e){}
     }
   }
 
@@ -291,12 +385,32 @@
 
   function processManual() {
     const codeInput = document.getElementById('manualCode');
-    const code = codeInput.value.trim();
-    if (code) {
-      handleScan(code);
+    const inputVal = codeInput.value.trim();
+    if (!inputVal) return;
+
+    // 1. إذا كان المدخل كود موجود مباشرة
+    if (studentsData[inputVal]) {
+      handleScan(inputVal);
       codeInput.value = '';
       focusScannerInput();
+      return;
     }
+
+    // 2. إذا كتب جزءاً من الاسم أو الكود، نأخذ أول نتيجة مطابقة
+    const q = inputVal.toLowerCase();
+    const matched = studentsList.find(s => 
+      String(s.name).toLowerCase().includes(q) || 
+      String(s.code).toLowerCase().includes(q)
+    );
+
+    if (matched) {
+      handleScan(matched.code);
+      codeInput.value = '';
+    } else {
+      handleScan(inputVal); // سيعطي تنبيه أن الكود غير مسجل
+      codeInput.value = '';
+    }
+    focusScannerInput();
   }
 
   function handleScan(code) {
@@ -311,7 +425,7 @@
 
     if (!student) {
       playBeep('error');
-      showCard("❌ كود غير مسجل", "الكود الممسوح: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
+      showCard("❌ كود غير مسجل", "المدخل: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
       setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
       return;
     }
