@@ -131,7 +131,7 @@
       border-radius: 12px;
       display: none;
       text-align: center;
-      animation: fadeIn 0.2s ease-in-out;
+      animation: fadeIn 0.15s ease-in-out;
     }
     .card-success { background-color: #d1fae5; border: 2px solid #10b981; color: #065f46; }
     .card-warning { background-color: #fef3c7; border: 2px solid #f59e0b; color: #92400e; }
@@ -204,7 +204,7 @@
     .progress-bar-fill {
       height: 100%;
       border-radius: 7px;
-      transition: width 0.5s ease-out, background-color 0.3s;
+      transition: width 0.4s ease-out, background-color 0.3s;
       position: relative;
     }
     .progress-bar-present { background: linear-gradient(90deg, #10b981, #34d399); }
@@ -253,7 +253,7 @@
       50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
     }
     .scanner-active {
-      animation: pulseScanner 1.5s infinite;
+      animation: pulseScanner 1s infinite;
       border-color: #10b981 !important;
     }
 
@@ -429,12 +429,16 @@
   let filteredStudentsList = [];
 
   const SCANNER_THRESHOLD_MS = 30;
-  const SCANNER_BUFFER_TIMEOUT_MS = 200;
+  const SCANNER_BUFFER_TIMEOUT_MS = 80;
   let lastKeystrokeTime = 0;
   let scannerBuffer = "";
   let scannerBufferTimer = null;
   let isScannerInput = false;
   let debugMode = false;
+
+  // للكاميرا
+  let lastCameraScan = '';
+  let lastCameraScanTime = 0;
 
   // ============================================================
   // 🛡️ حماية التركيز
@@ -480,17 +484,17 @@
         osc.frequency.value = 900;
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.12);
+        osc.stop(audioCtx.currentTime + 0.1);
       } else if (type === 'warning') {
         osc.frequency.value = 500;
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.25);
+        osc.stop(audioCtx.currentTime + 0.2);
       } else {
         osc.frequency.value = 250;
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.35);
+        osc.stop(audioCtx.currentTime + 0.3);
       }
     } catch (e) {}
   }
@@ -532,7 +536,7 @@
 
     const manualInput = document.getElementById('manualCode');
 
-    // 🌐 مستمع عام للماسح
+    // 🌐 مستمع عام للماسح (في أي مكان بالصفحة)
     let globalBuffer = "";
     let globalBufferTimer = null;
     let globalLastTime = 0;
@@ -549,19 +553,27 @@
         if (e.key && e.key.length === 1) {
           globalBuffer += e.key;
           clearTimeout(globalBufferTimer);
+
+          // ⚡ معالجة فورية إذا كان الكود موجوداً
+          if (studentsData[globalBuffer.trim()]) {
+            finalizeScannerInput(globalBuffer.trim());
+            globalBuffer = "";
+            return;
+          }
+
           globalBufferTimer = setTimeout(() => {
             if (globalBuffer.length >= 2) {
               finalizeScannerInput(globalBuffer);
               globalBuffer = "";
             }
-          }, 200);
+          }, 80);
         }
       } else {
         globalBuffer = e.key && e.key.length === 1 ? e.key : "";
       }
     });
 
-    // ⌨️ مستمع خانة البحث
+    // ⌨️ مستمع خانة البحث - نسخة مُسرَّعة
     manualInput.addEventListener('input', function(e) {
       const val = manualInput.value;
       const now = Date.now();
@@ -579,10 +591,24 @@
       if (timeDiff < SCANNER_THRESHOLD_MS && val.length > 0) {
         isScannerInput = true;
         updateModeIndicator('scanner');
-        clearTimeout(scannerBufferTimer);
         scannerBuffer = val;
+
+        // ⚡ معالجة فورية إذا كان الكود معروفاً
+        const cleanVal = val.trim();
+        if (studentsData[cleanVal]) {
+          if (debugMode) logScannerDebug(`⚡ معالجة فورية: "${cleanVal}"`, 'fast');
+          clearTimeout(scannerBufferTimer);
+          finalizeScannerInput(cleanVal);
+          return;
+        }
+
+        // ⏱️ إذا لم يكن معروفاً، انتظر 80ms فقط
+        clearTimeout(scannerBufferTimer);
         scannerBufferTimer = setTimeout(() => {
-          if (scannerBuffer.length >= 2) finalizeScannerInput(scannerBuffer);
+          if (scannerBuffer.length >= 2) {
+            if (debugMode) logScannerDebug(`⏱️ معالجة: "${scannerBuffer}"`, 'fast');
+            finalizeScannerInput(scannerBuffer);
+          }
           scannerBuffer = "";
           isScannerInput = false;
         }, SCANNER_BUFFER_TIMEOUT_MS);
@@ -601,19 +627,17 @@
       }
     });
 
+    // ⌨️ Enter / Tab - معالجة فورية
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         hideSearchResults();
         const val = manualInput.value.trim();
-        const timeSinceLastKey = Date.now() - lastKeystrokeTime;
-        if (debugMode) logScannerDebug(`⏎ Enter | قبل ${timeSinceLastKey}ms | "${val}"`, 'fast');
-        if (timeSinceLastKey < 100 && val.length >= 2) {
-          clearTimeout(scannerBufferTimer);
-          finalizeScannerInput(val);
-        } else {
-          processManual();
-        }
+        if (!val) return;
+
+        clearTimeout(scannerBufferTimer);
+        if (debugMode) logScannerDebug(`⏎ Enter فوري | "${val}"`, 'fast');
+        finalizeScannerInput(val);
       }
     });
 
@@ -623,13 +647,14 @@
   };
 
   // ============================================================
-  // 🎯 معالجة إدخال الماسح
+  // 🎯 معالجة إدخال الماسح (بحث سريع)
   // ============================================================
   function finalizeScannerInput(code) {
     const cleanCode = String(code).trim();
     if (!cleanCode) return;
     if (debugMode) logScannerDebug(`🎯 معالجة: "${cleanCode}"`, 'fast');
 
+    // ⚡ المسار السريع: Map lookup
     if (studentsData[cleanCode]) {
       handleScan(cleanCode);
       document.getElementById('manualCode').value = '';
@@ -637,10 +662,10 @@
       return;
     }
 
+    // 🔍 مطابقة الكود
     const q = cleanCode.toLowerCase();
     const matched = studentsList.find(s =>
-      String(s.code).toLowerCase() === q ||
-      String(s.name).toLowerCase() === q
+      String(s.code).toLowerCase() === q
     );
 
     if (matched) {
@@ -661,7 +686,7 @@
       indicator.className = 'scanner-mode-badge mode-scanner';
       indicator.innerHTML = '📡 وضع الماسح (باركود)';
       document.getElementById('manualCode').classList.add('scanner-active');
-      setTimeout(() => document.getElementById('manualCode').classList.remove('scanner-active'), 500);
+      setTimeout(() => document.getElementById('manualCode').classList.remove('scanner-active'), 400);
     } else {
       indicator.className = 'scanner-mode-badge mode-keyboard';
       indicator.innerHTML = '⌨️ وضع الكتابة';
@@ -1020,7 +1045,7 @@
     if (html5QrcodeScanner) return;
     html5QrcodeScanner = new Html5QrcodeScanner(
       "reader",
-      { fps: 20, qrbox: { width: 250, height: 250 } },
+      { fps: 25, qrbox: { width: 250, height: 250 } },
       false
     );
     html5QrcodeScanner.render(onScanSuccess, onScanError);
@@ -1046,7 +1071,14 @@
   }
 
   function onScanSuccess(decodedText) {
-    if (isProcessing) return;
+    // 🛡️ منع التسجيل المزدوج السريع
+    const now = Date.now();
+    if (decodedText === lastCameraScan && (now - lastCameraScanTime) < 800) {
+      return;
+    }
+    lastCameraScan = decodedText;
+    lastCameraScanTime = now;
+
     handleScan(decodedText);
   }
 
@@ -1081,10 +1113,9 @@
   }
 
   // ============================================================
-  // 🎯 معالجة المسح الرئيسية (مع قراءة رد السيرفر)
+  // 🎯 معالجة المسح الرئيسية (Optimistic UI - عرض فوري)
   // ============================================================
   function handleScan(code) {
-    isProcessing = true;
     const cleanCode = String(code).trim();
     const session = document.getElementById('sessionName').value.trim();
     const hall = document.getElementById('hallName').value.trim();
@@ -1094,16 +1125,20 @@
     const scanKey = cleanCode + "_" + session + "_" + todayDate;
 
     const student = studentsData[cleanCode];
+    const timestamp = getCurrentTimestamp();
 
+    // ❌ كود غير مسجل
     if (!student) {
+      isProcessing = true;
       playBeep('error');
       showCard("❌ كود غير مسجل", "المدخل: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
       return;
     }
 
-    // ⚠️ فحص محلي أولاً
+    // ⚠️ مسجل محلياً
     if (scannedToday.has(scanKey)) {
+      isProcessing = true;
       playBeep('warning');
       showCard(
         "⚠️ " + student.name,
@@ -1111,15 +1146,35 @@
         "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!",
         "warning"
       );
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
       return;
     }
 
     // ============================================
-    // 🔥 إرسال للسيرفر أولاً (إذا كان هناك إنترنت)
+    // 🚀 الحالة العادية: عرض فوري + إرسال بالسيرفر
     // ============================================
+    // ⚡ 1. عرض فوري
+    playBeep('success');
+    recordLocalScan(scanKey);
+    showCard(
+      "✅ " + student.name,
+      "الصف: " + student.grade + " | المجموعة: " + student.group +
+      "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
+      "تم التسجيل بنجاح الساعة " + timestamp,
+      "success",
+      cleanCode
+    );
+
+    // ⚡ 2. إرسال في الخلفية
+    const scanRecord = {
+      code: cleanCode,
+      sessionName: session,
+      hallName: hall,
+      deviceInfo: device,
+      timestamp: timestamp
+    };
+
     if (navigator.onLine) {
-      const timestamp = getCurrentTimestamp();
       fetch(SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -1135,21 +1190,10 @@
       .then(res => res.json())
       .then(res => {
         if (res.success) {
-          // ✅ السيرفر قَبِل
-          playBeep('success');
-          recordLocalScan(scanKey);
-          showCard(
-            "✅ " + student.name,
-            "الصف: " + student.grade + " | المجموعة: " + student.group +
-            "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
-            "تم التسجيل بنجاح الساعة " + timestamp,
-            "success",
-            cleanCode
-          );
+          if (debugMode) logScannerDebug(`✅ السيرفر قبل: ${student.name}`, 'fast');
         } else if (res.duplicate) {
-          // ⚠️ السيرفر رفض (مسجل مسبقاً في الشيت)
+          if (debugMode) logScannerDebug(`⚠️ السيرفر رفض: مسجل مسبقاً`, 'slow');
           playBeep('warning');
-          recordLocalScan(scanKey);
           showCard(
             "⚠️ " + student.name,
             "الكود: " + student.code + " | الصف: " + student.grade,
@@ -1157,7 +1201,7 @@
             "warning"
           );
         } else {
-          // ❌ خطأ من السيرفر
+          if (debugMode) logScannerDebug(`❌ خطأ: ${res.message}`, 'slow');
           playBeep('error');
           showCard(
             "❌ خطأ في التسجيل",
@@ -1168,48 +1212,15 @@
         }
       })
       .catch(err => {
-        // 🌐 فشل الاتصال → خزّن محلياً
-        console.log("فشل الاتصال، سيُخزَّن محلياً:", err);
-        playBeep('success');
-        recordLocalScan(scanKey);
-        const scanRecord = {
-          code: cleanCode,
-          sessionName: session,
-          hallName: hall,
-          deviceInfo: device,
-          timestamp: getCurrentTimestamp()
-        };
+        if (debugMode) logScannerDebug(`🌐 فشل الشبكة - تخزين محلي`, 'slow');
         storeLocally(scanRecord);
-        showCard(
-          "✅ " + student.name + " (بدون إنترنت)",
-          "الصف: " + student.grade + " | المجموعة: " + student.group,
-          "تم التسجيل محلياً - سيُرفع عند عودة الاتصال",
-          "success",
-          cleanCode
-        );
       });
     } else {
-      // 📡 أوفلاين
-      playBeep('success');
-      recordLocalScan(scanKey);
-      const scanRecord = {
-        code: cleanCode,
-        sessionName: session,
-        hallName: hall,
-        deviceInfo: device,
-        timestamp: getCurrentTimestamp()
-      };
       storeLocally(scanRecord);
-      showCard(
-        "✅ " + student.name + " (أوفلاين)",
-        "الصف: " + student.grade + " | المجموعة: " + student.group,
-        "تم التسجيل محلياً - سيُرفع عند عودة الاتصال",
-        "success",
-        cleanCode
-      );
     }
 
-    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
+    // ⚡ 3. استقبل المسح التالي فوراً
+    focusScannerInput();
   }
 
   // ============================================================
@@ -1333,10 +1344,7 @@
       "\n\nهل أنت متأكد؟"
     )) return;
 
-    if (!confirm(
-      "🚨 تأكيد أخير!\n\n" +
-      "هل تريد فعلاً إعادة الضبط؟"
-    )) return;
+    if (!confirm("🚨 تأكيد أخير!\n\nهل تريد فعلاً إعادة الضبط؟")) return;
 
     localStorage.clear();
     alert("✅ تم إعادة الضبط الكامل.\nسيُعاد تحميل الصفحة الآن...");
