@@ -135,9 +135,6 @@
     }
     .undo-btn:hover { background-color: #dc2626; }
 
-    /* ============================================ */
-    /* 🎨 لوحة الإحصائيات - نسخة النسب المئوية      */
-    /* ============================================ */
     .stats-panel {
       background: #ffffff;
       border: 1.5px solid #e2e8f0;
@@ -202,7 +199,6 @@
       flex-shrink: 0;
     }
 
-    /* تحذير عند انخفاض النسبة */
     .rate-low .rate-display-value { color: #dc2626; }
     .rate-medium .rate-display-value { color: #f59e0b; }
     .rate-high .rate-display-value { color: #059669; }
@@ -241,7 +237,6 @@
       border-color: #10b981 !important;
     }
 
-    /* 🔍 مؤشر تشخيص الماسح */
     .scanner-debug {
       display: none;
       background: #1e293b;
@@ -274,9 +269,6 @@
 
   <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
 
-  <!-- ============================================ -->
-  <!-- 🎨 لوحة الإحصائيات - بدون عدد صريح          -->
-  <!-- ============================================ -->
   <div class="stats-panel" id="stats-panel">
     <div class="rate-display" id="rate-display">
       <div class="rate-display-label">📊 معدل الحضور الحالي</div>
@@ -361,7 +353,6 @@
     </div>
     <div id="search-results" class="search-results-list"></div>
 
-    <!-- 🔍 أداة تشخيص الماسح (اختيارية) -->
     <div style="text-align:center;margin-top:8px;">
       <button onclick="toggleScannerDebug()" style="background:transparent;border:1px solid #cbd5e1;color:#64748b;padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer;">
         🔬 تشخيص الماسح
@@ -409,15 +400,46 @@
   let filteredStudentsList = [];
 
   // ============================================================
-  // 🎤 كشف ماسح الباركود USB (محسّن)
+  // 🎤 كشف ماسح الباركود USB
   // ============================================================
-  const SCANNER_THRESHOLD_MS = 30;         // أقل من 30ms = ماسح
-  const SCANNER_BUFFER_TIMEOUT_MS = 200;   // انتظار بعد آخر حرف
+  const SCANNER_THRESHOLD_MS = 30;
+  const SCANNER_BUFFER_TIMEOUT_MS = 200;
   let lastKeystrokeTime = 0;
   let scannerBuffer = "";
   let scannerBufferTimer = null;
   let isScannerInput = false;
   let debugMode = false;
+
+  // ============================================================
+  // 🛡️ حماية التركيز - يمنع خروج المؤشر من خانة البحث
+  // ============================================================
+  (function() {
+    const INPUT_IDS = ['manualCode', 'hallName', 'deviceInfo', 'sessionName'];
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Tab') {
+        const active = document.activeElement;
+        if (!active || !INPUT_IDS.includes(active.id)) {
+          e.preventDefault();
+          document.getElementById('manualCode').focus();
+        }
+      }
+    });
+
+    document.addEventListener('focusout', function(e) {
+      if (!INPUT_IDS.includes(e.target.id)) return;
+      setTimeout(() => {
+        const active = document.activeElement;
+        if (!active || active === document.body ||
+            (!INPUT_IDS.includes(active.id) &&
+             !active.closest('.search-results-list') &&
+             active.tagName !== 'BUTTON' &&
+             active.tagName !== 'SELECT')) {
+          document.getElementById('manualCode').focus();
+        }
+      }, 50);
+    });
+  })();
 
   // ============================================================
   // 🔊 الأصوات
@@ -470,7 +492,6 @@
     entry.textContent = '[' + new Date().toLocaleTimeString('en-GB') + '] ' + message;
     debugEl.appendChild(entry);
     debugEl.scrollTop = debugEl.scrollHeight;
-    // احتفظ بآخر 20 سطر فقط
     while (debugEl.children.length > 20) {
       debugEl.removeChild(debugEl.firstChild);
     }
@@ -493,9 +514,41 @@
 
     const manualInput = document.getElementById('manualCode');
 
-    // ========================================================
-    // ⌨️ المستمع الرئيسي - محسّن للماسحات
-    // ========================================================
+    // ============================================================
+    // 🌐 مستمع عام على مستوى الصفحة (للماسح)
+    // ============================================================
+    let globalBuffer = "";
+    let globalBufferTimer = null;
+    let globalLastTime = 0;
+    const GLOBAL_SCANNER_THRESHOLD = 50;
+
+    document.addEventListener('keypress', function(e) {
+      const now = Date.now();
+      const diff = now - globalLastTime;
+      globalLastTime = now;
+
+      if (e.target === manualInput) return;
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+      if (diff < GLOBAL_SCANNER_THRESHOLD || globalBuffer.length > 0) {
+        if (e.key && e.key.length === 1) {
+          globalBuffer += e.key;
+          clearTimeout(globalBufferTimer);
+          globalBufferTimer = setTimeout(() => {
+            if (globalBuffer.length >= 2) {
+              finalizeScannerInput(globalBuffer);
+              globalBuffer = "";
+            }
+          }, 200);
+        }
+      } else {
+        globalBuffer = e.key && e.key.length === 1 ? e.key : "";
+      }
+    });
+
+    // ============================================================
+    // ⌨️ المستمع على خانة البحث
+    // ============================================================
     manualInput.addEventListener('input', function(e) {
       const val = manualInput.value;
       const now = Date.now();
@@ -510,7 +563,6 @@
         );
       }
 
-      // كشف الماسح
       if (timeDiff < SCANNER_THRESHOLD_MS && val.length > 0) {
         isScannerInput = true;
         updateModeIndicator('scanner');
@@ -540,9 +592,9 @@
       }
     });
 
-    // ========================================================
-    // ⌨️ Enter / Tab
-    // ========================================================
+    // ============================================================
+    // ⌨️ Enter / Tab في خانة البحث
+    // ============================================================
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
@@ -556,11 +608,9 @@
         }
 
         if (timeSinceLastKey < 100 && val.length >= 2) {
-          // Enter سريع بعد الكتابة = ماسح
           clearTimeout(scannerBufferTimer);
           finalizeScannerInput(val);
         } else {
-          // Enter يدوي
           processManual();
         }
       }
@@ -571,17 +621,10 @@
         hideSearchResults();
       }
     });
-
-    // إعادة التركيز عند النقر على الصفحة
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('input, select, button, .search-item')) {
-        setTimeout(focusScannerInput, 50);
-      }
-    });
   };
 
   // ============================================================
-  // 🎯 معالجة إدخال الماسح النهائي
+  // 🎯 معالجة إدخال الماسح
   // ============================================================
   function finalizeScannerInput(code) {
     const cleanCode = String(code).trim();
@@ -589,7 +632,6 @@
 
     if (debugMode) logScannerDebug(`🎯 معالجة: "${cleanCode}"`, 'fast');
 
-    // البحث المباشر
     if (studentsData[cleanCode]) {
       handleScan(cleanCode);
       document.getElementById('manualCode').value = '';
@@ -597,7 +639,6 @@
       return;
     }
 
-    // البحث الذكي (كود أو اسم)
     const q = cleanCode.toLowerCase();
     const matched = studentsList.find(s =>
       String(s.code).toLowerCase() === q ||
@@ -729,23 +770,24 @@
   }
 
   // ============================================================
-  // 📊 لوحة الإحصائيات (نسب فقط - بدون أرقام صريحة)
+  // 📊 لوحة الإحصائيات (نسب فقط)
   // ============================================================
   function updateDashboard() {
     const session = document.getElementById('sessionName').value.trim();
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const todaySuffix = "_" + session + "_" + todayDate;
+
     const totalStudents = (currentFilterGrade || currentFilterGroup)
       ? filteredStudentsList.length
       : studentsList.length;
 
-    // حساب الحاضرين في الجلسة الحالية مع مراعاة الفلتر
     let presentCount = 0;
     const filteredCodes = new Set(filteredStudentsList.map(s => String(s.code).trim()));
     const hasFilter = currentFilterGrade || currentFilterGroup;
 
     scannedToday.forEach(key => {
-      if (!key.endsWith("_" + session)) return;
+      if (!key.endsWith(todaySuffix)) return;
       const code = key.split("_")[0];
-      // إذا كان الفلتر مطبقاً، احسب فقط الطلاب المفلترين
       if (hasFilter && !filteredCodes.has(code)) return;
       presentCount++;
     });
@@ -755,14 +797,12 @@
     const absentRate = totalStudents > 0 ? Math.round((absentCount / totalStudents) * 100) : 0;
     const rate = presentRate;
 
-    // تحديث الأشرطة
     document.getElementById('present-bar').style.width = presentRate + '%';
     document.getElementById('absent-bar').style.width = absentRate + '%';
     document.getElementById('present-percent').innerText = presentRate + '%';
     document.getElementById('absent-percent').innerText = absentRate + '%';
     document.getElementById('rate-value').innerText = rate + '%';
 
-    // تغيير لون لوحة النسبة حسب معدل الحضور
     const panel = document.getElementById('rate-display');
     panel.parentElement.classList.remove('rate-low', 'rate-medium', 'rate-high');
     if (totalStudents === 0 || presentCount === 0) {
@@ -775,7 +815,6 @@
       panel.parentElement.classList.add('rate-high');
     }
 
-    // رسالة تلميح
     const hint = document.getElementById('stats-hint');
     if (totalStudents === 0) {
       hint.innerText = '⚠️ لم يتم تحميل الطلاب بعد';
@@ -940,13 +979,15 @@
   }
 
   // ============================================================
-  // 📅 تتبع مسح اليوم
+  // 📅 تتبع مسح اليوم (مفتاح مع تاريخ)
   // ============================================================
   function loadTodayScanned() {
     const todayKey = 'scanned_' + new Date().toISOString().slice(0, 10);
     const saved = localStorage.getItem(todayKey);
     if (saved) {
       try { scannedToday = new Set(JSON.parse(saved)); } catch (e) {}
+    } else {
+      scannedToday = new Set();
     }
   }
 
@@ -1051,7 +1092,7 @@
   }
 
   // ============================================================
-  // 🎯 معالجة المسح الرئيسية
+  // 🎯 معالجة المسح الرئيسية (مع مقارنة التاريخ)
   // ============================================================
   function handleScan(code) {
     isProcessing = true;
@@ -1060,7 +1101,12 @@
     const hall = document.getElementById('hallName').value.trim();
     const device = document.getElementById('deviceInfo').value.trim();
 
-    const scanKey = cleanCode + "_" + session;
+    // ============================================
+    // 🔑 المفتاح الجديد: يحتوي على التاريخ
+    // ============================================
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const scanKey = cleanCode + "_" + session + "_" + todayDate;
+
     const student = studentsData[cleanCode];
 
     if (!student) {
@@ -1070,13 +1116,22 @@
       return;
     }
 
+    // ============================================
+    // ✅ التحقق: هل سُجّل اليوم في نفس الجلسة؟
+    // ============================================
     if (scannedToday.has(scanKey)) {
       playBeep('warning');
-      showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
+      showCard(
+        "⚠️ " + student.name,
+        "الكود: " + student.code + " | الصف: " + student.grade,
+        "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!",
+        "warning"
+      );
       setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
       return;
     }
 
+    // ✅ تسجيل ناجح
     playBeep('success');
     recordLocalScan(scanKey);
 
@@ -1119,11 +1174,12 @@
   }
 
   // ============================================================
-  // ↩️ التراجع
+  // ↩️ التراجع (مع التاريخ)
   // ============================================================
   function undoScan(cleanCode) {
     const session = document.getElementById('sessionName').value.trim();
-    const scanKey = cleanCode + "_" + session;
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const scanKey = cleanCode + "_" + session + "_" + todayDate;
 
     removeLocalScan(scanKey);
 
