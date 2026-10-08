@@ -88,7 +88,6 @@
     .search-item-name { font-size: 14px; font-weight: bold; color: #0f172a; }
     .search-item-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
 
-    /* مؤشر وضع الماسح */
     .scanner-mode-badge {
       display: inline-flex;
       align-items: center;
@@ -97,20 +96,14 @@
       border-radius: 12px;
       font-size: 10px;
       font-weight: 700;
-      margin-right: 6px;
     }
     .mode-keyboard { background: #dbeafe; color: #1e40af; }
     .mode-scanner { background: #dcfce7; color: #166534; }
-    .mode-camera { background: #fef3c7; color: #92400e; }
 
     #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 220px; }
     #reader.hidden { display: none; }
 
-    .camera-controls {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
+    .camera-controls { display: flex; gap: 8px; margin-top: 10px; }
 
     #student-card {
       margin-top: 12px;
@@ -142,7 +135,6 @@
     }
     .undo-btn:hover { background-color: #dc2626; }
 
-    /* لوحة الإحصائيات */
     .dashboard {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -162,7 +154,6 @@
     .stat-total { background: #f1f5f9; color: #475569; }
     .stat-number { font-size: 17px; font-weight: 800; display: block; }
 
-    /* شارة الفلتر النشط */
     #active-filter-badge {
       display: none;
       background: #0d9488;
@@ -175,7 +166,6 @@
       font-weight: 700;
     }
 
-    /* شارة وضع الإدخال */
     #input-mode-badge {
       display: block;
       text-align: center;
@@ -204,16 +194,13 @@
 <div class="container">
   <h3 class="title">نظام تسجيل الحضور والاختبارات</h3>
 
-  <!-- شريط الحالة -->
   <div class="status-bar">
     <span id="net-status" class="status-online">🌐 متصل</span>
     <span id="pending-count">📋 معلق: 0</span>
   </div>
 
-  <!-- زر المزامنة -->
   <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
 
-  <!-- لوحة الإحصائيات -->
   <div class="dashboard">
     <div class="stat-box stat-present">
       <span class="stat-number" id="stat-present">0</span>
@@ -233,7 +220,6 @@
     </div>
   </div>
 
-  <!-- معلومات الجلسة -->
   <div class="input-group">
     <label>اسم الجلسة / المحاضرة / الاختبار:</label>
     <input type="text" id="sessionName" value="امتحان الحصة" onchange="saveInputState()">
@@ -250,7 +236,6 @@
     </div>
   </div>
 
-  <!-- قسم الفلترة -->
   <div class="filter-section" style="background:#f8fafc;padding:10px;border-radius:8px;margin-bottom:10px;">
     <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">
       🎯 تصفية النتائج (اختياري - يسرّع البحث):
@@ -275,12 +260,10 @@
     <div id="filter-badge" style="font-size:11px;color:#64748b;font-weight:700;margin-top:6px;text-align:center;"></div>
   </div>
 
-  <!-- شارة الفلتر النشط -->
   <div id="active-filter-badge">
     🎯 الفلتر النشط: <span id="active-filter-text"></span>
   </div>
 
-  <!-- خانة الإدخال الرئيسية (تعمل مع الكاميرا + الماسح + الكتابة) -->
   <div class="input-group">
     <label>📝 ابحث بالاسم / الكود، أو استخدم ماسح الباركود:</label>
     <div id="input-mode-badge">
@@ -295,17 +278,14 @@
     <div id="search-results" class="search-results-list"></div>
   </div>
 
-  <!-- التحكم بالكاميرا -->
   <div class="camera-controls">
     <button id="camera-toggle-btn" class="btn btn-secondary" onclick="toggleCameraScanner()" style="flex:1;">
       📷 تشغيل الكاميرا
     </button>
   </div>
 
-  <!-- عارض الكاميرا -->
   <div id="reader" class="hidden"></div>
 
-  <!-- بطاقة الطالب -->
   <div id="student-card">
     <div class="student-name" id="card-name">--</div>
     <div class="student-details" id="card-info">--</div>
@@ -316,7 +296,7 @@
 
 <script>
   // ============================================================
-  // ⚠️ مهم جداً: استبدل الرابط التالي برابط Google Apps Script
+  // ⚠️ رابط Google Apps Script الخاص بك
   // ============================================================
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzn3THPIqzLOrHsoIAY3LKSn-FfiTmt02R38huQ-75b_UqyyN_K9KZuGuuJi0niwaWzLw/exec";
 
@@ -332,15 +312,14 @@
   let audioCtx = null;
   let scanTimeout = null;
 
-  // الفلاتر
   let currentFilterGrade = "";
   let currentFilterGroup = "";
   let filteredStudentsList = [];
 
   // ============================================================
-  // 🎤 كشف جهاز الباركود (Keyboard Wedge Detection)
+  // 🎤 كشف ماسح الباركود USB
   // ============================================================
-  const SCANNER_THRESHOLD_MS = 50; // أقل من 50ms بين الحروف = ماسح
+  const SCANNER_THRESHOLD_MS = 50;
   let lastKeystrokeTime = 0;
   let scannerBuffer = "";
   let scannerBufferTimer = null;
@@ -379,7 +358,7 @@
   }
 
   // ============================================================
-  // 🚀 التهيئة عند تحميل الصفحة
+  // 🚀 التهيئة
   // ============================================================
   window.onload = function() {
     loadInputState();
@@ -388,7 +367,6 @@
     fetchStudentsList();
     updateUI();
     updateDashboard();
-
     focusScannerInput();
 
     window.addEventListener('online', updateUI);
@@ -396,24 +374,18 @@
 
     const manualInput = document.getElementById('manualCode');
 
-    // ========================================================
-    // ⌨️ المستمع الرئيسي: يفرق بين الكتابة البشرية والمسح
-    // ========================================================
     manualInput.addEventListener('input', function(e) {
       const val = manualInput.value;
       const now = Date.now();
       const timeDiff = now - lastKeystrokeTime;
       lastKeystrokeTime = now;
 
-      // 🔍 كشف إذا كان الإدخال من ماسح الباركود
       if (timeDiff < SCANNER_THRESHOLD_MS && val.length > 0) {
-        // إدخال سريع جداً = ماسح
         isScannerInput = true;
         updateModeIndicator('scanner');
         clearTimeout(scannerBufferTimer);
         scannerBuffer = val;
 
-        // إذا لم يصل Enter خلال 300ms، اعتبره مسحاً كاملاً
         scannerBufferTimer = setTimeout(() => {
           if (scannerBuffer.length >= 2) {
             finalizeScannerInput(scannerBuffer);
@@ -422,12 +394,10 @@
           isScannerInput = false;
         }, 300);
       } else {
-        // كتابة بشرية
         isScannerInput = false;
         updateModeIndicator('keyboard');
       }
 
-      // البحث الفوري (للكتابة البشرية فقط)
       if (!isScannerInput) {
         clearTimeout(scanTimeout);
         if (val.trim().length > 0) {
@@ -438,30 +408,21 @@
       }
     });
 
-    // ========================================================
-    // ⌨️ مفتاح Enter: يُنفّذ التسجيل
-    // ========================================================
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         hideSearchResults();
 
         const val = manualInput.value.trim();
-
-        // إذا كان Enter قادم من ماسح باركود (خلال 50ms من آخر حرف)
         const timeSinceLastKey = Date.now() - lastKeystrokeTime;
         if (timeSinceLastKey < SCANNER_THRESHOLD_MS + 50 && val.length >= 2) {
           finalizeScannerInput(val);
         } else {
-          // Enter يدوي
           processManual();
         }
       }
     });
 
-    // ========================================================
-    // 🖱️ إخفاء النتائج عند النقر خارجها
-    // ========================================================
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.input-group')) {
         hideSearchResults();
@@ -470,13 +431,12 @@
   };
 
   // ============================================================
-  // 🎯 معالجة إدخال الماسح النهائي
+  // 🎯 معالجة إدخال الماسح
   // ============================================================
   function finalizeScannerInput(code) {
     const cleanCode = String(code).trim();
     if (!cleanCode) return;
 
-    // إذا كان الكود معروفاً → سجّل مباشرة
     if (studentsData[cleanCode]) {
       handleScan(cleanCode);
       document.getElementById('manualCode').value = '';
@@ -484,7 +444,6 @@
       return;
     }
 
-    // إذا كان الكود غير معروف، ابحث بالاسم
     const q = cleanCode.toLowerCase();
     const matched = filteredStudentsList.find(s =>
       String(s.code).toLowerCase() === q ||
@@ -494,15 +453,12 @@
     if (matched) {
       handleScan(matched.code);
     } else {
-      handleScan(cleanCode); // سيظهر خطأ "كود غير مسجل"
+      handleScan(cleanCode);
     }
     document.getElementById('manualCode').value = '';
     focusScannerInput();
   }
 
-  // ============================================================
-  // 🎨 تحديث مؤشر وضع الإدخال
-  // ============================================================
   function updateModeIndicator(mode) {
     const indicator = document.getElementById('mode-indicator');
     if (!indicator) return;
@@ -551,7 +507,6 @@
       groupSelect.appendChild(opt);
     });
 
-    // استرجع من localStorage
     const savedGrade = localStorage.getItem('filter_grade');
     const savedGroup = localStorage.getItem('filter_group');
     if (savedGrade && [...gradesSet].includes(savedGrade)) gradeSelect.value = savedGrade;
@@ -597,7 +552,6 @@
       badge.style.color = '#64748b';
     }
 
-    // شارة الفلتر النشط
     const activeBadge = document.getElementById('active-filter-badge');
     const activeText = document.getElementById('active-filter-text');
     const parts = [];
@@ -623,7 +577,7 @@
   // ============================================================
   function updateDashboard() {
     const session = document.getElementById('sessionName').value.trim();
-    const totalStudents = filteredStudentsList.length > 0 || (currentFilterGrade || currentFilterGroup)
+    const totalStudents = (currentFilterGrade || currentFilterGroup)
       ? filteredStudentsList.length
       : studentsList.length;
 
@@ -715,7 +669,7 @@
   }
 
   // ============================================================
-  // 💾 حفظ واسترجاع الحالة
+  // 💾 الحفظ والاسترجاع
   // ============================================================
   function saveInputState() {
     localStorage.setItem('saved_session', document.getElementById('sessionName').value);
@@ -827,3 +781,249 @@
   function savePendingScans(scans) {
     localStorage.setItem('pending_scans', JSON.stringify(scans));
     updateUI();
+  }
+
+  // ============================================================
+  // 📷 الكاميرا
+  // ============================================================
+  function startCameraScanner() {
+    if (html5QrcodeScanner) return;
+
+    html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 20, qrbox: { width: 250, height: 250 } },
+      false
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanError);
+    isScannerRunning = true;
+    document.getElementById('reader').classList.remove('hidden');
+    document.getElementById('camera-toggle-btn').innerText = "🛑 إيقاف الكاميرا";
+  }
+
+  function stopCameraScanner() {
+    if (!html5QrcodeScanner) return;
+    html5QrcodeScanner.clear().then(() => {
+      html5QrcodeScanner = null;
+      isScannerRunning = false;
+      document.getElementById('reader').classList.add('hidden');
+      document.getElementById('camera-toggle-btn').innerText = "📷 تشغيل الكاميرا";
+      focusScannerInput();
+    }).catch(err => console.log("خطأ في إيقاف الكاميرا:", err));
+  }
+
+  function toggleCameraScanner() {
+    if (isScannerRunning) {
+      stopCameraScanner();
+    } else {
+      startCameraScanner();
+    }
+  }
+
+  function onScanSuccess(decodedText) {
+    if (isProcessing) return;
+    handleScan(decodedText);
+  }
+
+  function onScanError(errorMessage) {
+    // تجاهل الأخطاء المتكررة
+  }
+
+  // ============================================================
+  // 🎯 معالجة الإدخال اليدوي
+  // ============================================================
+  function processManual() {
+    const codeInput = document.getElementById('manualCode');
+    const inputVal = codeInput.value.trim();
+    if (!inputVal) return;
+
+    if (studentsData[inputVal]) {
+      handleScan(inputVal);
+      codeInput.value = '';
+      focusScannerInput();
+      return;
+    }
+
+    const q = inputVal.toLowerCase();
+    const matched = studentsList.find(s =>
+      String(s.name).toLowerCase().includes(q) ||
+      String(s.code).toLowerCase().includes(q)
+    );
+
+    if (matched) {
+      handleScan(matched.code);
+    } else {
+      handleScan(inputVal);
+    }
+    codeInput.value = '';
+    focusScannerInput();
+  }
+
+  // ============================================================
+  // 🎯 معالجة المسح الرئيسية
+  // ============================================================
+  function handleScan(code) {
+    isProcessing = true;
+    const cleanCode = String(code).trim();
+    const session = document.getElementById('sessionName').value.trim();
+    const hall = document.getElementById('hallName').value.trim();
+    const device = document.getElementById('deviceInfo').value.trim();
+
+    const scanKey = cleanCode + "_" + session;
+    const student = studentsData[cleanCode];
+
+    if (!student) {
+      playBeep('error');
+      showCard("❌ كود غير مسجل", "المدخل: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      return;
+    }
+
+    if (scannedToday.has(scanKey)) {
+      playBeep('warning');
+      showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
+      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1200);
+      return;
+    }
+
+    playBeep('success');
+    recordLocalScan(scanKey);
+
+    const now = new Date();
+    const timeStr = now.getFullYear() + "-" +
+                    String(now.getMonth()+1).padStart(2,'0') + "-" +
+                    String(now.getDate()).padStart(2,'0') + " " +
+                    now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    showCard(
+      "✅ " + student.name,
+      "الصف: " + student.grade + " | المجموعة: " + student.group + "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
+      "تم التسجيل بنجاح الساعة " + timeStr,
+      "success",
+      cleanCode
+    );
+
+    const scanRecord = { code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr };
+
+    if (navigator.onLine) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "recordScan", code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr })
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (!res.success) {
+          // إذا رفض السيرفر (مثلاً مسجل مسبقاً)، خزنه محلياً كإجراء احتياطي
+          console.log("رفض السيرفر:", res.message);
+        }
+      })
+      .catch(err => {
+        storeLocally(scanRecord);
+      });
+    } else {
+      storeLocally(scanRecord);
+    }
+
+    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
+  }
+
+  // ============================================================
+  // ↩️ التراجع
+  // ============================================================
+  function undoScan(cleanCode) {
+    const session = document.getElementById('sessionName').value.trim();
+    const scanKey = cleanCode + "_" + session;
+
+    removeLocalScan(scanKey);
+
+    let pending = getPendingScans();
+    const wasPending = pending.some(item => item.code === cleanCode && item.sessionName === session);
+    pending = pending.filter(item => !(item.code === cleanCode && item.sessionName === session));
+    savePendingScans(pending);
+
+    if (!wasPending && navigator.onLine) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "undoScan", code: cleanCode, sessionName: session })
+      }).catch(err => console.log("خطأ في التراجع:", err));
+    }
+
+    playBeep('warning');
+    showCard("↩️ تم التراجع", "الكود: " + cleanCode, "تم إلغاء تسجيل الحضور بنجاح ويمكن إعادة مسحه الآن.", "warning");
+    focusScannerInput();
+  }
+
+  // ============================================================
+  // 💾 التخزين المحلي
+  // ============================================================
+  function storeLocally(record) {
+    const pending = getPendingScans();
+    pending.push(record);
+    savePendingScans(pending);
+  }
+
+  // ============================================================
+  // 🔄 المزامنة
+  // ============================================================
+  function syncPendingScans() {
+    const pending = getPendingScans();
+    if (pending.length === 0) return;
+
+    const syncBtn = document.getElementById('sync-btn');
+    syncBtn.innerText = "⏳ جاري الرفع إلى Google Sheets...";
+    syncBtn.disabled = true;
+
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action: "syncBatch", scans: pending })
+    })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success) {
+        savePendingScans([]);
+        alert("🎉 تم رفع كافة سجلات الحضور المعلقة بنجاح!");
+      } else {
+        alert("حدث خطأ أثناء الرفع: " + res.message);
+      }
+      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
+      syncBtn.disabled = false;
+      updateUI();
+    })
+    .catch(err => {
+      alert("❌ تعذر الرفع، يرجى التأكد من جودة الاتصال بالإنترنت.");
+      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
+      syncBtn.disabled = false;
+    });
+  }
+
+  // ============================================================
+  // 🎴 بطاقة الطالب
+  // ============================================================
+  function showCard(name, info, status, type, codeForUndo = null) {
+    const card = document.getElementById('student-card');
+    const undoContainer = document.getElementById('undo-container');
+
+    document.getElementById('card-name').innerText = name;
+    document.getElementById('card-info').innerHTML = info;
+    document.getElementById('card-status').innerText = status;
+
+    if (type === 'success' && codeForUndo) {
+      undoContainer.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.className = 'undo-btn';
+      btn.textContent = '↩️ تراجع عن التسجيل';
+      btn.onclick = () => undoScan(codeForUndo);
+      undoContainer.appendChild(btn);
+    } else {
+      undoContainer.innerHTML = '';
+    }
+
+    card.className = "card-" + type;
+    card.style.display = "block";
+  }
+</script>
+
+</body>
+</html>
