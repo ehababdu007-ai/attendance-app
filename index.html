@@ -135,24 +135,77 @@
     }
     .undo-btn:hover { background-color: #dc2626; }
 
-    .dashboard {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
+    /* ============================================ */
+    /* 🎨 لوحة الإحصائيات - نسخة النسب المئوية      */
+    /* ============================================ */
+    .stats-panel {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
       margin-bottom: 12px;
     }
-    .stat-box {
+    .rate-display {
       text-align: center;
-      padding: 8px 4px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 600;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed #cbd5e1;
     }
-    .stat-present { background: #d1fae5; color: #065f46; }
-    .stat-absent { background: #fee2e2; color: #991b1b; }
-    .stat-rate { background: #dbeafe; color: #1e40af; }
-    .stat-total { background: #f1f5f9; color: #475569; }
-    .stat-number { font-size: 17px; font-weight: 800; display: block; }
+    .rate-display-label {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .rate-display-value {
+      font-size: 32px;
+      font-weight: 900;
+      color: #0d9488;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .progress-icon {
+      font-size: 16px;
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .progress-bar-container {
+      flex: 1;
+      height: 14px;
+      background: #f1f5f9;
+      border-radius: 7px;
+      overflow: hidden;
+      position: relative;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 7px;
+      transition: width 0.5s ease-out, background-color 0.3s;
+      position: relative;
+    }
+    .progress-bar-present { background: linear-gradient(90deg, #10b981, #34d399); }
+    .progress-bar-absent { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .progress-percent {
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 42px;
+      text-align: left;
+      font-variant-numeric: tabular-nums;
+      color: #334155;
+      flex-shrink: 0;
+    }
+
+    /* تحذير عند انخفاض النسبة */
+    .rate-low .rate-display-value { color: #dc2626; }
+    .rate-medium .rate-display-value { color: #f59e0b; }
+    .rate-high .rate-display-value { color: #059669; }
 
     #active-filter-badge {
       display: none;
@@ -187,6 +240,26 @@
       animation: pulseScanner 1.5s infinite;
       border-color: #10b981 !important;
     }
+
+    /* 🔍 مؤشر تشخيص الماسح */
+    .scanner-debug {
+      display: none;
+      background: #1e293b;
+      color: #94a3b8;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-family: monospace;
+      margin-top: 6px;
+      direction: ltr;
+      text-align: left;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    .scanner-debug.visible { display: block; }
+    .scanner-debug-entry { padding: 1px 0; }
+    .scanner-debug-fast { color: #4ade80; }
+    .scanner-debug-slow { color: #f87171; }
   </style>
 </head>
 <body>
@@ -201,22 +274,33 @@
 
   <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
 
-  <div class="dashboard">
-    <div class="stat-box stat-present">
-      <span class="stat-number" id="stat-present">0</span>
-      ✅ حاضر
+  <!-- ============================================ -->
+  <!-- 🎨 لوحة الإحصائيات - بدون عدد صريح          -->
+  <!-- ============================================ -->
+  <div class="stats-panel" id="stats-panel">
+    <div class="rate-display" id="rate-display">
+      <div class="rate-display-label">📊 معدل الحضور الحالي</div>
+      <div class="rate-display-value" id="rate-value">0%</div>
     </div>
-    <div class="stat-box stat-absent">
-      <span class="stat-number" id="stat-absent">0</span>
-      ❌ غائب
+
+    <div class="progress-row">
+      <div class="progress-icon">✅</div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill progress-bar-present" id="present-bar" style="width: 0%;"></div>
+      </div>
+      <div class="progress-percent" id="present-percent">0%</div>
     </div>
-    <div class="stat-box stat-rate">
-      <span class="stat-number" id="stat-rate">0%</span>
-      📊 النسبة
+
+    <div class="progress-row">
+      <div class="progress-icon">❌</div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill progress-bar-absent" id="absent-bar" style="width: 0%;"></div>
+      </div>
+      <div class="progress-percent" id="absent-percent">0%</div>
     </div>
-    <div class="stat-box stat-total">
-      <span class="stat-number" id="stat-total">0</span>
-      👥 إجمالي
+
+    <div style="text-align:center;font-size:11px;color:#94a3b8;margin-top:6px;" id="stats-hint">
+      💡 ابدأ المسح لعرض المؤشرات
     </div>
   </div>
 
@@ -272,10 +356,18 @@
       </span>
     </div>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="manualCode" placeholder="اكتب أو امسح الباركود هنا..." autofocus autocomplete="off" inputmode="text">
+      <input type="text" id="manualCode" placeholder="اكتب أو امسح الباركود هنا..." autofocus autocomplete="off" inputmode="text" spellcheck="false">
       <button class="btn" onclick="processManual()" style="width: 30%;">تسجيل</button>
     </div>
     <div id="search-results" class="search-results-list"></div>
+
+    <!-- 🔍 أداة تشخيص الماسح (اختيارية) -->
+    <div style="text-align:center;margin-top:8px;">
+      <button onclick="toggleScannerDebug()" style="background:transparent;border:1px solid #cbd5e1;color:#64748b;padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer;">
+        🔬 تشخيص الماسح
+      </button>
+    </div>
+    <div id="scanner-debug" class="scanner-debug"></div>
   </div>
 
   <div class="camera-controls">
@@ -317,13 +409,15 @@
   let filteredStudentsList = [];
 
   // ============================================================
-  // 🎤 كشف ماسح الباركود USB
+  // 🎤 كشف ماسح الباركود USB (محسّن)
   // ============================================================
-  const SCANNER_THRESHOLD_MS = 50;
+  const SCANNER_THRESHOLD_MS = 30;         // أقل من 30ms = ماسح
+  const SCANNER_BUFFER_TIMEOUT_MS = 200;   // انتظار بعد آخر حرف
   let lastKeystrokeTime = 0;
   let scannerBuffer = "";
   let scannerBufferTimer = null;
   let isScannerInput = false;
+  let debugMode = false;
 
   // ============================================================
   // 🔊 الأصوات
@@ -358,6 +452,31 @@
   }
 
   // ============================================================
+  // 🔬 تشخيص الماسح
+  // ============================================================
+  function toggleScannerDebug() {
+    debugMode = !debugMode;
+    document.getElementById('scanner-debug').classList.toggle('visible', debugMode);
+    if (debugMode) {
+      logScannerDebug("🔬 وضع التشخيص مُفعّل - امسح باركود لرؤية البيانات", 'slow');
+    }
+  }
+
+  function logScannerDebug(message, type = 'slow') {
+    if (!debugMode) return;
+    const debugEl = document.getElementById('scanner-debug');
+    const entry = document.createElement('div');
+    entry.className = 'scanner-debug-entry scanner-debug-' + type;
+    entry.textContent = '[' + new Date().toLocaleTimeString('en-GB') + '] ' + message;
+    debugEl.appendChild(entry);
+    debugEl.scrollTop = debugEl.scrollHeight;
+    // احتفظ بآخر 20 سطر فقط
+    while (debugEl.children.length > 20) {
+      debugEl.removeChild(debugEl.firstChild);
+    }
+  }
+
+  // ============================================================
   // 🚀 التهيئة
   // ============================================================
   window.onload = function() {
@@ -374,12 +493,24 @@
 
     const manualInput = document.getElementById('manualCode');
 
+    // ========================================================
+    // ⌨️ المستمع الرئيسي - محسّن للماسحات
+    // ========================================================
     manualInput.addEventListener('input', function(e) {
       const val = manualInput.value;
       const now = Date.now();
       const timeDiff = now - lastKeystrokeTime;
       lastKeystrokeTime = now;
 
+      if (debugMode && val.length > 0) {
+        const lastChar = val.slice(-1);
+        logScannerDebug(
+          `حرف "${lastChar}" | فرق: ${timeDiff}ms | ${timeDiff < SCANNER_THRESHOLD_MS ? '⚡ ماسح' : '👤 بشري'}`,
+          timeDiff < SCANNER_THRESHOLD_MS ? 'fast' : 'slow'
+        );
+      }
+
+      // كشف الماسح
       if (timeDiff < SCANNER_THRESHOLD_MS && val.length > 0) {
         isScannerInput = true;
         updateModeIndicator('scanner');
@@ -388,11 +519,12 @@
 
         scannerBufferTimer = setTimeout(() => {
           if (scannerBuffer.length >= 2) {
+            if (debugMode) logScannerDebug(`✅ إرسال نهائي: "${scannerBuffer}"`, 'fast');
             finalizeScannerInput(scannerBuffer);
           }
           scannerBuffer = "";
           isScannerInput = false;
-        }, 300);
+        }, SCANNER_BUFFER_TIMEOUT_MS);
       } else {
         isScannerInput = false;
         updateModeIndicator('keyboard');
@@ -408,6 +540,9 @@
       }
     });
 
+    // ========================================================
+    // ⌨️ Enter / Tab
+    // ========================================================
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
@@ -415,9 +550,17 @@
 
         const val = manualInput.value.trim();
         const timeSinceLastKey = Date.now() - lastKeystrokeTime;
-        if (timeSinceLastKey < SCANNER_THRESHOLD_MS + 50 && val.length >= 2) {
+
+        if (debugMode) {
+          logScannerDebug(`⏎ Enter | آخر حرف قبل ${timeSinceLastKey}ms | قيمة: "${val}"`, 'fast');
+        }
+
+        if (timeSinceLastKey < 100 && val.length >= 2) {
+          // Enter سريع بعد الكتابة = ماسح
+          clearTimeout(scannerBufferTimer);
           finalizeScannerInput(val);
         } else {
+          // Enter يدوي
           processManual();
         }
       }
@@ -428,15 +571,25 @@
         hideSearchResults();
       }
     });
+
+    // إعادة التركيز عند النقر على الصفحة
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('input, select, button, .search-item')) {
+        setTimeout(focusScannerInput, 50);
+      }
+    });
   };
 
   // ============================================================
-  // 🎯 معالجة إدخال الماسح
+  // 🎯 معالجة إدخال الماسح النهائي
   // ============================================================
   function finalizeScannerInput(code) {
     const cleanCode = String(code).trim();
     if (!cleanCode) return;
 
+    if (debugMode) logScannerDebug(`🎯 معالجة: "${cleanCode}"`, 'fast');
+
+    // البحث المباشر
     if (studentsData[cleanCode]) {
       handleScan(cleanCode);
       document.getElementById('manualCode').value = '';
@@ -444,15 +597,18 @@
       return;
     }
 
+    // البحث الذكي (كود أو اسم)
     const q = cleanCode.toLowerCase();
-    const matched = filteredStudentsList.find(s =>
+    const matched = studentsList.find(s =>
       String(s.code).toLowerCase() === q ||
       String(s.name).toLowerCase() === q
     );
 
     if (matched) {
+      if (debugMode) logScannerDebug(`🔍 مطابقة: ${matched.name}`, 'fast');
       handleScan(matched.code);
     } else {
+      if (debugMode) logScannerDebug(`❌ لا يوجد مطابقة`, 'slow');
       handleScan(cleanCode);
     }
     document.getElementById('manualCode').value = '';
@@ -545,10 +701,10 @@
     const isFiltered = currentFilterGrade || currentFilterGroup;
 
     if (isFiltered) {
-      badge.innerHTML = `✅ ${total} طالب مطابق للفلتر`;
+      badge.innerHTML = `✅ الفلتر مطبّق - ${total} طالب`;
       badge.style.color = '#0d9488';
     } else {
-      badge.innerHTML = `📚 ${total} طالب إجمالي (بدون فلتر)`;
+      badge.innerHTML = `📚 لم يتم تطبيق فلتر`;
       badge.style.color = '#64748b';
     }
 
@@ -573,7 +729,7 @@
   }
 
   // ============================================================
-  // 📊 لوحة الإحصائيات
+  // 📊 لوحة الإحصائيات (نسب فقط - بدون أرقام صريحة)
   // ============================================================
   function updateDashboard() {
     const session = document.getElementById('sessionName').value.trim();
@@ -581,18 +737,56 @@
       ? filteredStudentsList.length
       : studentsList.length;
 
+    // حساب الحاضرين في الجلسة الحالية مع مراعاة الفلتر
     let presentCount = 0;
+    const filteredCodes = new Set(filteredStudentsList.map(s => String(s.code).trim()));
+    const hasFilter = currentFilterGrade || currentFilterGroup;
+
     scannedToday.forEach(key => {
-      if (key.endsWith("_" + session)) presentCount++;
+      if (!key.endsWith("_" + session)) return;
+      const code = key.split("_")[0];
+      // إذا كان الفلتر مطبقاً، احسب فقط الطلاب المفلترين
+      if (hasFilter && !filteredCodes.has(code)) return;
+      presentCount++;
     });
 
     const absentCount = Math.max(0, totalStudents - presentCount);
-    const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+    const presentRate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+    const absentRate = totalStudents > 0 ? Math.round((absentCount / totalStudents) * 100) : 0;
+    const rate = presentRate;
 
-    document.getElementById('stat-present').innerText = presentCount;
-    document.getElementById('stat-absent').innerText = absentCount;
-    document.getElementById('stat-rate').innerText = rate + '%';
-    document.getElementById('stat-total').innerText = totalStudents;
+    // تحديث الأشرطة
+    document.getElementById('present-bar').style.width = presentRate + '%';
+    document.getElementById('absent-bar').style.width = absentRate + '%';
+    document.getElementById('present-percent').innerText = presentRate + '%';
+    document.getElementById('absent-percent').innerText = absentRate + '%';
+    document.getElementById('rate-value').innerText = rate + '%';
+
+    // تغيير لون لوحة النسبة حسب معدل الحضور
+    const panel = document.getElementById('rate-display');
+    panel.parentElement.classList.remove('rate-low', 'rate-medium', 'rate-high');
+    if (totalStudents === 0 || presentCount === 0) {
+      // لا شيء
+    } else if (rate < 50) {
+      panel.parentElement.classList.add('rate-low');
+    } else if (rate < 75) {
+      panel.parentElement.classList.add('rate-medium');
+    } else {
+      panel.parentElement.classList.add('rate-high');
+    }
+
+    // رسالة تلميح
+    const hint = document.getElementById('stats-hint');
+    if (totalStudents === 0) {
+      hint.innerText = '⚠️ لم يتم تحميل الطلاب بعد';
+      hint.style.color = '#dc2626';
+    } else if (presentCount === 0) {
+      hint.innerText = '💡 ابدأ المسح لعرض المؤشرات';
+      hint.style.color = '#94a3b8';
+    } else {
+      hint.innerText = '✨ يتم التحديث لحظياً مع كل مسح';
+      hint.style.color = '#0d9488';
+    }
   }
 
   // ============================================================
@@ -824,9 +1018,7 @@
     handleScan(decodedText);
   }
 
-  function onScanError(errorMessage) {
-    // تجاهل الأخطاء المتكررة
-  }
+  function onScanError(errorMessage) {}
 
   // ============================================================
   // 🎯 معالجة الإدخال اليدوي
@@ -913,7 +1105,6 @@
       .then(res => res.json())
       .then(res => {
         if (!res.success) {
-          // إذا رفض السيرفر (مثلاً مسجل مسبقاً)، خزنه محلياً كإجراء احتياطي
           console.log("رفض السيرفر:", res.message);
         }
       })
