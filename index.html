@@ -7,10 +7,11 @@
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     :root { --primary-color: #0d9488; --bg-color: #f1f5f9; --card-bg: #ffffff; }
+    * { -webkit-tap-highlight-color: transparent; }
     body { font-family: system-ui, -apple-system, sans-serif; background-color: var(--bg-color); margin: 0; padding: 12px; direction: rtl; }
     .container { max-width: 480px; margin: 0 auto; background: var(--card-bg); padding: 16px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
     .title { text-align: center; margin: 0 0 10px 0; color: #0f172a; font-size: 20px; font-weight: 800; }
-    
+
     .status-bar {
       display: flex;
       justify-content: space-between;
@@ -24,7 +25,7 @@
     }
     .status-online { color: #059669; }
     .status-offline { color: #dc2626; }
-    
+
     .sync-btn {
       width: 100%;
       padding: 10px;
@@ -36,15 +37,31 @@
       cursor: pointer;
       margin-bottom: 12px;
       display: none;
+      transition: background 0.2s;
     }
+    .sync-btn:hover:not(:disabled) { background-color: #1d4ed8; }
+    .sync-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .input-group { margin-bottom: 10px; position: relative; }
     label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 700; color: #475569; }
-    input[type="text"] { width: 100%; padding: 9px; border: 1.5px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; }
-    input[type="text"]:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2); }
+    input[type="text"], select {
+      width: 100%;
+      padding: 9px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 14px;
+      outline: none;
+      background: white;
+      font-family: inherit;
+    }
+    input[type="text"]:focus, select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2); }
     .btn { width: 100%; padding: 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
-    
+    .btn:hover { background-color: #0f766e; }
+    .btn-secondary { background-color: #64748b; }
+    .btn-secondary:hover { background-color: #475569; }
+
     .search-results-list {
       position: absolute;
       top: 100%;
@@ -54,7 +71,7 @@
       background: #ffffff;
       border: 1.5px solid var(--primary-color);
       border-radius: 8px;
-      max-height: 220px;
+      max-height: 280px;
       overflow-y: auto;
       box-shadow: 0 8px 20px rgba(0,0,0,0.15);
       margin-top: 4px;
@@ -71,8 +88,30 @@
     .search-item-name { font-size: 14px; font-weight: bold; color: #0f172a; }
     .search-item-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
 
+    /* مؤشر وضع الماسح */
+    .scanner-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .mode-keyboard { background: #dbeafe; color: #1e40af; }
+    .mode-scanner { background: #dcfce7; color: #166534; }
+    .mode-camera { background: #fef3c7; color: #92400e; }
+
     #reader { width: 100%; margin-top: 10px; border-radius: 12px; overflow: hidden; background: #000; min-height: 220px; }
-    
+    #reader.hidden { display: none; }
+
+    .camera-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
     #student-card {
       margin-top: 12px;
       padding: 14px;
@@ -86,7 +125,7 @@
     .card-error { background-color: #fee2e2; border: 2px solid #ef4444; color: #991b1b; }
 
     .student-name { font-size: 19px; font-weight: bold; margin-bottom: 4px; }
-    .student-details { font-size: 13px; opacity: 0.9; margin-bottom: 4px; }
+    .student-details { font-size: 13px; opacity: 0.9; margin-bottom: 4px; line-height: 1.6; }
     .status-msg { font-size: 12px; font-weight: 600; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(0,0,0,0.15); }
 
     .undo-btn {
@@ -103,9 +142,60 @@
     }
     .undo-btn:hover { background-color: #dc2626; }
 
+    /* لوحة الإحصائيات */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      text-align: center;
+      padding: 8px 4px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .stat-present { background: #d1fae5; color: #065f46; }
+    .stat-absent { background: #fee2e2; color: #991b1b; }
+    .stat-rate { background: #dbeafe; color: #1e40af; }
+    .stat-total { background: #f1f5f9; color: #475569; }
+    .stat-number { font-size: 17px; font-weight: 800; display: block; }
+
+    /* شارة الفلتر النشط */
+    #active-filter-badge {
+      display: none;
+      background: #0d9488;
+      color: white;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      margin-bottom: 8px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    /* شارة وضع الإدخال */
+    #input-mode-badge {
+      display: block;
+      text-align: center;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: #64748b;
+    }
+
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseScanner {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    }
+    .scanner-active {
+      animation: pulseScanner 1.5s infinite;
+      border-color: #10b981 !important;
     }
   </style>
 </head>
@@ -114,16 +204,39 @@
 <div class="container">
   <h3 class="title">نظام تسجيل الحضور والاختبارات</h3>
 
+  <!-- شريط الحالة -->
   <div class="status-bar">
-    <span id="net-status" class="status-online">🌐 متصل بالإنترنت</span>
+    <span id="net-status" class="status-online">🌐 متصل</span>
     <span id="pending-count">📋 معلق: 0</span>
   </div>
 
+  <!-- زر المزامنة -->
   <button id="sync-btn" class="sync-btn" onclick="syncPendingScans()">🔄 رفع الحضور المخزن إلى Google Sheets</button>
 
+  <!-- لوحة الإحصائيات -->
+  <div class="dashboard">
+    <div class="stat-box stat-present">
+      <span class="stat-number" id="stat-present">0</span>
+      ✅ حاضر
+    </div>
+    <div class="stat-box stat-absent">
+      <span class="stat-number" id="stat-absent">0</span>
+      ❌ غائب
+    </div>
+    <div class="stat-box stat-rate">
+      <span class="stat-number" id="stat-rate">0%</span>
+      📊 النسبة
+    </div>
+    <div class="stat-box stat-total">
+      <span class="stat-number" id="stat-total">0</span>
+      👥 إجمالي
+    </div>
+  </div>
+
+  <!-- معلومات الجلسة -->
   <div class="input-group">
     <label>اسم الجلسة / المحاضرة / الاختبار:</label>
-    <input type="text" id="sessionName" value="امتحان الحصة">
+    <input type="text" id="sessionName" value="امتحان الحصة" onchange="saveInputState()">
   </div>
 
   <div class="grid-2">
@@ -137,17 +250,62 @@
     </div>
   </div>
 
+  <!-- قسم الفلترة -->
+  <div class="filter-section" style="background:#f8fafc;padding:10px;border-radius:8px;margin-bottom:10px;">
+    <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">
+      🎯 تصفية النتائج (اختياري - يسرّع البحث):
+    </div>
+    <div class="grid-2">
+      <div class="input-group" style="margin-bottom:0;">
+        <label>الصف الدراسي:</label>
+        <select id="filterGrade" onchange="onFilterChange()">
+          <option value="">جميع الصفوف</option>
+        </select>
+      </div>
+      <div class="input-group" style="margin-bottom:0;">
+        <label>المجموعة / الموعد:</label>
+        <select id="filterGroup" onchange="onFilterChange()">
+          <option value="">جميع المجموعات</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="clearFilters()" style="width:100%;padding:6px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px;">
+      🔄 مسح جميع الفلاتر
+    </button>
+    <div id="filter-badge" style="font-size:11px;color:#64748b;font-weight:700;margin-top:6px;text-align:center;"></div>
+  </div>
+
+  <!-- شارة الفلتر النشط -->
+  <div id="active-filter-badge">
+    🎯 الفلتر النشط: <span id="active-filter-text"></span>
+  </div>
+
+  <!-- خانة الإدخال الرئيسية (تعمل مع الكاميرا + الماسح + الكتابة) -->
   <div class="input-group">
-    <label>البحث باسم الطالب أو أدخل الكود / السكانر:</label>
+    <label>📝 ابحث بالاسم / الكود، أو استخدم ماسح الباركود:</label>
+    <div id="input-mode-badge">
+      <span class="scanner-mode-badge mode-keyboard" id="mode-indicator">
+        ⌨️ وضع الكتابة
+      </span>
+    </div>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="manualCode" placeholder="ابحث باسم الطالب أو الكود..." autofocus autocomplete="off">
-      <button class="btn" onclick="processManual()" style="width: 32%;">تسجيل</button>
+      <input type="text" id="manualCode" placeholder="اكتب أو امسح الباركود هنا..." autofocus autocomplete="off" inputmode="text">
+      <button class="btn" onclick="processManual()" style="width: 30%;">تسجيل</button>
     </div>
     <div id="search-results" class="search-results-list"></div>
   </div>
 
-  <div id="reader"></div>
+  <!-- التحكم بالكاميرا -->
+  <div class="camera-controls">
+    <button id="camera-toggle-btn" class="btn btn-secondary" onclick="toggleCameraScanner()" style="flex:1;">
+      📷 تشغيل الكاميرا
+    </button>
+  </div>
 
+  <!-- عارض الكاميرا -->
+  <div id="reader" class="hidden"></div>
+
+  <!-- بطاقة الطالب -->
   <div id="student-card">
     <div class="student-name" id="card-name">--</div>
     <div class="student-details" id="card-info">--</div>
@@ -157,9 +315,16 @@
 </div>
 
 <script>
+  // ============================================================
+  // ⚠️ مهم جداً: استبدل الرابط التالي برابط Google Apps Script
+  // ============================================================
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzn3THPIqzLOrHsoIAY3LKSn-FfiTmt02R38huQ-75b_UqyyN_K9KZuGuuJi0niwaWzLw/exec";
 
-  let html5QrcodeScanner;
+  // ============================================================
+  // 📦 المتغيرات العامة
+  // ============================================================
+  let html5QrcodeScanner = null;
+  let isScannerRunning = false;
   let isProcessing = false;
   let studentsData = {};
   let studentsList = [];
@@ -167,6 +332,23 @@
   let audioCtx = null;
   let scanTimeout = null;
 
+  // الفلاتر
+  let currentFilterGrade = "";
+  let currentFilterGroup = "";
+  let filteredStudentsList = [];
+
+  // ============================================================
+  // 🎤 كشف جهاز الباركود (Keyboard Wedge Detection)
+  // ============================================================
+  const SCANNER_THRESHOLD_MS = 50; // أقل من 50ms بين الحروف = ماسح
+  let lastKeystrokeTime = 0;
+  let scannerBuffer = "";
+  let scannerBufferTimer = null;
+  let isScannerInput = false;
+
+  // ============================================================
+  // 🔊 الأصوات
+  // ============================================================
   function playBeep(type = 'success') {
     try {
       if (!audioCtx) {
@@ -174,10 +356,9 @@
       }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      
+
       if (type === 'success') {
         osc.frequency.value = 900;
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
@@ -197,13 +378,16 @@
     } catch (e) {}
   }
 
+  // ============================================================
+  // 🚀 التهيئة عند تحميل الصفحة
+  // ============================================================
   window.onload = function() {
     loadInputState();
     loadCachedStudents();
     loadTodayScanned();
     fetchStudentsList();
     updateUI();
-    startCameraScanner();
+    updateDashboard();
 
     focusScannerInput();
 
@@ -212,35 +396,72 @@
 
     const manualInput = document.getElementById('manualCode');
 
+    // ========================================================
+    // ⌨️ المستمع الرئيسي: يفرق بين الكتابة البشرية والمسح
+    // ========================================================
+    manualInput.addEventListener('input', function(e) {
+      const val = manualInput.value;
+      const now = Date.now();
+      const timeDiff = now - lastKeystrokeTime;
+      lastKeystrokeTime = now;
+
+      // 🔍 كشف إذا كان الإدخال من ماسح الباركود
+      if (timeDiff < SCANNER_THRESHOLD_MS && val.length > 0) {
+        // إدخال سريع جداً = ماسح
+        isScannerInput = true;
+        updateModeIndicator('scanner');
+        clearTimeout(scannerBufferTimer);
+        scannerBuffer = val;
+
+        // إذا لم يصل Enter خلال 300ms، اعتبره مسحاً كاملاً
+        scannerBufferTimer = setTimeout(() => {
+          if (scannerBuffer.length >= 2) {
+            finalizeScannerInput(scannerBuffer);
+          }
+          scannerBuffer = "";
+          isScannerInput = false;
+        }, 300);
+      } else {
+        // كتابة بشرية
+        isScannerInput = false;
+        updateModeIndicator('keyboard');
+      }
+
+      // البحث الفوري (للكتابة البشرية فقط)
+      if (!isScannerInput) {
+        clearTimeout(scanTimeout);
+        if (val.trim().length > 0) {
+          scanTimeout = setTimeout(() => renderSearchResults(val), 150);
+        } else {
+          hideSearchResults();
+        }
+      }
+    });
+
+    // ========================================================
+    // ⌨️ مفتاح Enter: يُنفّذ التسجيل
+    // ========================================================
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         hideSearchResults();
-        processManual();
+
+        const val = manualInput.value.trim();
+
+        // إذا كان Enter قادم من ماسح باركود (خلال 50ms من آخر حرف)
+        const timeSinceLastKey = Date.now() - lastKeystrokeTime;
+        if (timeSinceLastKey < SCANNER_THRESHOLD_MS + 50 && val.length >= 2) {
+          finalizeScannerInput(val);
+        } else {
+          // Enter يدوي
+          processManual();
+        }
       }
     });
 
-    manualInput.addEventListener('input', function(e) {
-      clearTimeout(scanTimeout);
-      const val = manualInput.value.trim();
-
-      if (val.length === 0) {
-        hideSearchResults();
-        return;
-      }
-
-      renderSearchResults(val);
-
-      if (/^\d+$/.test(val) && val.length >= 2) {
-        scanTimeout = setTimeout(() => {
-          if (studentsData[val]) {
-            hideSearchResults();
-            processManual();
-          }
-        }, 80);
-      }
-    });
-
+    // ========================================================
+    // 🖱️ إخفاء النتائج عند النقر خارجها
+    // ========================================================
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.input-group')) {
         hideSearchResults();
@@ -248,32 +469,231 @@
     });
   };
 
+  // ============================================================
+  // 🎯 معالجة إدخال الماسح النهائي
+  // ============================================================
+  function finalizeScannerInput(code) {
+    const cleanCode = String(code).trim();
+    if (!cleanCode) return;
+
+    // إذا كان الكود معروفاً → سجّل مباشرة
+    if (studentsData[cleanCode]) {
+      handleScan(cleanCode);
+      document.getElementById('manualCode').value = '';
+      focusScannerInput();
+      return;
+    }
+
+    // إذا كان الكود غير معروف، ابحث بالاسم
+    const q = cleanCode.toLowerCase();
+    const matched = filteredStudentsList.find(s =>
+      String(s.code).toLowerCase() === q ||
+      String(s.name).toLowerCase() === q
+    );
+
+    if (matched) {
+      handleScan(matched.code);
+    } else {
+      handleScan(cleanCode); // سيظهر خطأ "كود غير مسجل"
+    }
+    document.getElementById('manualCode').value = '';
+    focusScannerInput();
+  }
+
+  // ============================================================
+  // 🎨 تحديث مؤشر وضع الإدخال
+  // ============================================================
+  function updateModeIndicator(mode) {
+    const indicator = document.getElementById('mode-indicator');
+    if (!indicator) return;
+
+    if (mode === 'scanner') {
+      indicator.className = 'scanner-mode-badge mode-scanner';
+      indicator.innerHTML = '📡 وضع الماسح (باركود)';
+      document.getElementById('manualCode').classList.add('scanner-active');
+      setTimeout(() => {
+        document.getElementById('manualCode').classList.remove('scanner-active');
+      }, 500);
+    } else {
+      indicator.className = 'scanner-mode-badge mode-keyboard';
+      indicator.innerHTML = '⌨️ وضع الكتابة';
+    }
+  }
+
+  // ============================================================
+  // 🎯 الفلاتر
+  // ============================================================
+  function buildFilterOptions() {
+    const gradesSet = new Set();
+    const groupsSet = new Set();
+
+    studentsList.forEach(s => {
+      if (s.grade && s.grade !== "غير محدد") gradesSet.add(String(s.grade).trim());
+      if (s.group && s.group !== "عامة") groupsSet.add(String(s.group).trim());
+    });
+
+    const gradeSelect = document.getElementById('filterGrade');
+    const groupSelect = document.getElementById('filterGroup');
+
+    gradeSelect.innerHTML = '<option value="">جميع الصفوف</option>';
+    [...gradesSet].sort().forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      gradeSelect.appendChild(opt);
+    });
+
+    groupSelect.innerHTML = '<option value="">جميع المجموعات</option>';
+    [...groupsSet].sort().forEach(g => {
+      const opt = document.createElement('option');
+      opt.value = g;
+      opt.textContent = g;
+      groupSelect.appendChild(opt);
+    });
+
+    // استرجع من localStorage
+    const savedGrade = localStorage.getItem('filter_grade');
+    const savedGroup = localStorage.getItem('filter_group');
+    if (savedGrade && [...gradesSet].includes(savedGrade)) gradeSelect.value = savedGrade;
+    if (savedGroup && [...groupsSet].includes(savedGroup)) groupSelect.value = savedGroup;
+
+    onFilterChange();
+  }
+
+  function onFilterChange() {
+    currentFilterGrade = document.getElementById('filterGrade').value;
+    currentFilterGroup = document.getElementById('filterGroup').value;
+
+    localStorage.setItem('filter_grade', currentFilterGrade);
+    localStorage.setItem('filter_group', currentFilterGroup);
+
+    filteredStudentsList = studentsList.filter(s => {
+      const matchGrade = !currentFilterGrade || String(s.grade).trim() === currentFilterGrade;
+      const matchGroup = !currentFilterGroup || String(s.group).trim() === currentFilterGroup;
+      return matchGrade && matchGroup;
+    });
+
+    updateFilterBadge();
+    updateDashboard();
+
+    const manualInput = document.getElementById('manualCode');
+    if (manualInput.value.trim().length > 0) {
+      renderSearchResults(manualInput.value);
+    }
+  }
+
+  function updateFilterBadge() {
+    const badge = document.getElementById('filter-badge');
+    if (!badge) return;
+
+    const total = filteredStudentsList.length;
+    const isFiltered = currentFilterGrade || currentFilterGroup;
+
+    if (isFiltered) {
+      badge.innerHTML = `✅ ${total} طالب مطابق للفلتر`;
+      badge.style.color = '#0d9488';
+    } else {
+      badge.innerHTML = `📚 ${total} طالب إجمالي (بدون فلتر)`;
+      badge.style.color = '#64748b';
+    }
+
+    // شارة الفلتر النشط
+    const activeBadge = document.getElementById('active-filter-badge');
+    const activeText = document.getElementById('active-filter-text');
+    const parts = [];
+    if (currentFilterGrade) parts.push(currentFilterGrade);
+    if (currentFilterGroup) parts.push(currentFilterGroup);
+
+    if (parts.length > 0) {
+      activeText.textContent = parts.join(" • ");
+      activeBadge.style.display = "block";
+    } else {
+      activeBadge.style.display = "none";
+    }
+  }
+
+  function clearFilters() {
+    document.getElementById('filterGrade').value = "";
+    document.getElementById('filterGroup').value = "";
+    onFilterChange();
+  }
+
+  // ============================================================
+  // 📊 لوحة الإحصائيات
+  // ============================================================
+  function updateDashboard() {
+    const session = document.getElementById('sessionName').value.trim();
+    const totalStudents = filteredStudentsList.length > 0 || (currentFilterGrade || currentFilterGroup)
+      ? filteredStudentsList.length
+      : studentsList.length;
+
+    let presentCount = 0;
+    scannedToday.forEach(key => {
+      if (key.endsWith("_" + session)) presentCount++;
+    });
+
+    const absentCount = Math.max(0, totalStudents - presentCount);
+    const rate = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+
+    document.getElementById('stat-present').innerText = presentCount;
+    document.getElementById('stat-absent').innerText = absentCount;
+    document.getElementById('stat-rate').innerText = rate + '%';
+    document.getElementById('stat-total').innerText = totalStudents;
+  }
+
+  // ============================================================
+  // 🔍 البحث والعرض
+  // ============================================================
   function renderSearchResults(query) {
     const resultsContainer = document.getElementById('search-results');
     const q = query.toLowerCase().trim();
-    
-    const matches = studentsList.filter(s => 
-      String(s.name).toLowerCase().includes(q) || 
+
+    const sourceList = (currentFilterGrade || currentFilterGroup)
+      ? filteredStudentsList
+      : studentsList;
+
+    const allMatches = sourceList.filter(s =>
+      String(s.name).toLowerCase().includes(q) ||
       String(s.code).toLowerCase().includes(q)
-    ).slice(0, 8);
+    );
+    const matches = allMatches.slice(0, 12);
 
     if (matches.length === 0) {
       hideSearchResults();
       return;
     }
 
-    let html = '';
+    resultsContainer.innerHTML = '';
+
+    if (allMatches.length > 12) {
+      const header = document.createElement('div');
+      header.style.cssText = 'padding:6px 12px;font-size:11px;background:#fef3c7;color:#92400e;font-weight:700;text-align:center;border-bottom:1px solid #fcd34d;';
+      header.textContent = `⚠️ ${allMatches.length} نتيجة - استخدم الفلاتر لتقليل النتائج (يظهر أول 12 فقط)`;
+      resultsContainer.appendChild(header);
+    }
+
     matches.forEach(s => {
-      html += `
-        <div class="search-item" onclick="selectStudentFromSearch('${s.code}')">
-          <div class="search-item-name">${s.name}</div>
-          <div class="search-item-meta">كود: ${s.code} | الصف: ${s.grade} | الموعد: ${s.group}</div>
+      const div = document.createElement('div');
+      div.className = 'search-item';
+      div.innerHTML = `
+        <div class="search-item-name">👤 ${escapeHtml(s.name)}</div>
+        <div class="search-item-meta">
+          كود: ${escapeHtml(String(s.code))}
+          | الصف: ${escapeHtml(s.grade)}
+          | الموعد: ${escapeHtml(s.group)}
         </div>
       `;
+      div.onclick = () => selectStudentFromSearch(String(s.code));
+      resultsContainer.appendChild(div);
     });
 
-    resultsContainer.innerHTML = html;
     resultsContainer.style.display = 'block';
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, m => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[m]);
   }
 
   function selectStudentFromSearch(code) {
@@ -294,18 +714,28 @@
     if (input) input.focus();
   }
 
+  // ============================================================
+  // 💾 حفظ واسترجاع الحالة
+  // ============================================================
   function saveInputState() {
+    localStorage.setItem('saved_session', document.getElementById('sessionName').value);
     localStorage.setItem('saved_hallName', document.getElementById('hallName').value);
     localStorage.setItem('saved_deviceInfo', document.getElementById('deviceInfo').value);
+    updateDashboard();
   }
 
   function loadInputState() {
+    const savedSession = localStorage.getItem('saved_session');
     const savedHall = localStorage.getItem('saved_hallName');
     const savedDevice = localStorage.getItem('saved_deviceInfo');
+    if (savedSession) document.getElementById('sessionName').value = savedSession;
     if (savedHall) document.getElementById('hallName').value = savedHall;
     if (savedDevice) document.getElementById('deviceInfo').value = savedDevice;
   }
 
+  // ============================================================
+  // 🌐 حالة الاتصال
+  // ============================================================
   function updateUI() {
     const isOnline = navigator.onLine;
     const netStatus = document.getElementById('net-status');
@@ -316,15 +746,18 @@
 
     if (isOnline) {
       netStatus.className = "status-online";
-      netStatus.innerText = "🌐 متصل بالإنترنت";
+      netStatus.innerText = "🌐 متصل";
       syncBtn.style.display = pending.length > 0 ? "block" : "none";
     } else {
       netStatus.className = "status-offline";
-      netStatus.innerText = "📡 بدون إنترنت (أوفلاين)";
+      netStatus.innerText = "📡 أوفلاين";
       syncBtn.style.display = "none";
     }
   }
 
+  // ============================================================
+  // 📥 جلب الطلاب
+  // ============================================================
   function fetchStudentsList() {
     if (!navigator.onLine) return;
     fetch(SCRIPT_URL + "?action=getStudents")
@@ -337,6 +770,8 @@
           studentsData = map;
           localStorage.setItem('cached_students', JSON.stringify(map));
           localStorage.setItem('cached_students_list', JSON.stringify(data.students));
+          buildFilterOptions();
+          updateDashboard();
         }
       })
       .catch(err => console.log("تعذر تحديث الكشوفات:", err));
@@ -346,33 +781,44 @@
     const cachedMap = localStorage.getItem('cached_students');
     const cachedArr = localStorage.getItem('cached_students_list');
     if (cachedMap) {
-      try { studentsData = JSON.parse(cachedMap); } catch(e){}
+      try { studentsData = JSON.parse(cachedMap); } catch (e) {}
     }
     if (cachedArr) {
-      try { studentsList = JSON.parse(cachedArr); } catch(e){}
+      try {
+        studentsList = JSON.parse(cachedArr);
+        setTimeout(buildFilterOptions, 100);
+      } catch (e) {}
     }
   }
 
+  // ============================================================
+  // 📅 تتبع مسح اليوم
+  // ============================================================
   function loadTodayScanned() {
-    const todayKey = 'scanned_' + new Date().toISOString().slice(0,10);
+    const todayKey = 'scanned_' + new Date().toISOString().slice(0, 10);
     const saved = localStorage.getItem(todayKey);
     if (saved) {
-      try { scannedToday = new Set(JSON.parse(saved)); } catch(e){}
+      try { scannedToday = new Set(JSON.parse(saved)); } catch (e) {}
     }
   }
 
   function recordLocalScan(code) {
-    const todayKey = 'scanned_' + new Date().toISOString().slice(0,10);
+    const todayKey = 'scanned_' + new Date().toISOString().slice(0, 10);
     scannedToday.add(code);
     localStorage.setItem(todayKey, JSON.stringify(Array.from(scannedToday)));
+    updateDashboard();
   }
 
   function removeLocalScan(code) {
-    const todayKey = 'scanned_' + new Date().toISOString().slice(0,10);
+    const todayKey = 'scanned_' + new Date().toISOString().slice(0, 10);
     scannedToday.delete(code);
     localStorage.setItem(todayKey, JSON.stringify(Array.from(scannedToday)));
+    updateDashboard();
   }
 
+  // ============================================================
+  // 📤 السجلات المعلقة
+  // ============================================================
   function getPendingScans() {
     const list = localStorage.getItem('pending_scans');
     return list ? JSON.parse(list) : [];
@@ -381,190 +827,3 @@
   function savePendingScans(scans) {
     localStorage.setItem('pending_scans', JSON.stringify(scans));
     updateUI();
-  }
-
-  function startCameraScanner() {
-    html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader", 
-      { fps: 20, qrbox: { width: 250, height: 250 } }, 
-      false
-    );
-    html5QrcodeScanner.render(onScanSuccess);
-  }
-
-  function onScanSuccess(decodedText) {
-    if (isProcessing) return;
-    handleScan(decodedText);
-  }
-
-  function processManual() {
-    const codeInput = document.getElementById('manualCode');
-    const inputVal = codeInput.value.trim();
-    if (!inputVal) return;
-
-    if (studentsData[inputVal]) {
-      handleScan(inputVal);
-      codeInput.value = '';
-      focusScannerInput();
-      return;
-    }
-
-    const q = inputVal.toLowerCase();
-    const matched = studentsList.find(s => 
-      String(s.name).toLowerCase().includes(q) || 
-      String(s.code).toLowerCase().includes(q)
-    );
-
-    if (matched) {
-      handleScan(matched.code);
-      codeInput.value = '';
-    } else {
-      handleScan(inputVal);
-      codeInput.value = '';
-    }
-    focusScannerInput();
-  }
-
-  function handleScan(code) {
-    isProcessing = true;
-    const cleanCode = String(code).trim();
-    const session = document.getElementById('sessionName').value.trim();
-    const hall = document.getElementById('hallName').value.trim();
-    const device = document.getElementById('deviceInfo').value.trim();
-
-    const scanKey = cleanCode + "_" + session;
-    const student = studentsData[cleanCode];
-
-    if (!student) {
-      playBeep('error');
-      showCard("❌ كود غير مسجل", "المدخل: " + cleanCode, "هذا الطالب غير موجود بجدول البيانات!", "error");
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
-      return;
-    }
-
-    if (scannedToday.has(scanKey)) {
-      playBeep('warning');
-      showCard("⚠️ " + student.name, "الكود: " + student.code + " | الصف: " + student.grade, "الطالب مسجل حضور بالفعل اليوم لهذا الدرس!", "warning");
-      setTimeout(() => { isProcessing = false; focusScannerInput(); }, 1000);
-      return;
-    }
-
-    playBeep('success');
-    recordLocalScan(scanKey);
-
-    const now = new Date();
-    const timeStr = now.getFullYear() + "-" + 
-                    String(now.getMonth()+1).padStart(2,'0') + "-" + 
-                    String(now.getDate()).padStart(2,'0') + " " + 
-                    now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
-
-    showCard(
-      "✅ " + student.name,
-      "الصف: " + student.grade + " | المجموعة: " + student.group + "<br>القاعة: " + (hall || "افتراضي") + " | المصدر: " + (device || "افتراضي"),
-      "تم التسجيل بنجاح الساعة " + timeStr,
-      "success",
-      cleanCode
-    );
-
-    const scanRecord = { code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr };
-
-    if (navigator.onLine) {
-      fetch(SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "recordScan", code: cleanCode, sessionName: session, hallName: hall, deviceInfo: device, timestamp: timeStr })
-      }).catch(err => {
-        storeLocally(scanRecord);
-      });
-    } else {
-      storeLocally(scanRecord);
-    }
-
-    setTimeout(() => { isProcessing = false; focusScannerInput(); }, 800);
-  }
-
-  function undoScan(cleanCode) {
-    const session = document.getElementById('sessionName').value.trim();
-    const scanKey = cleanCode + "_" + session;
-
-    // 1. إزالة من الذاكرة المحلية
-    removeLocalScan(scanKey);
-
-    // 2. إزالة من السجلات المعلقة أوفلاين إن وجِدت
-    let pending = getPendingScans();
-    pending = pending.filter(item => !(item.code === cleanCode && item.sessionName === session));
-    savePendingScans(pending);
-
-    // 3. إرسال أمر الحذف إلى Google Sheets إن كان متصلاً
-    if (navigator.onLine) {
-      fetch(SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "undoScan", code: cleanCode, sessionName: session })
-      }).catch(err => console.log("خطأ في التراجع:", err));
-    }
-
-    playBeep('warning');
-    showCard("↩️ تم التراجع", "الكود: " + cleanCode, "تم إلغاء تسجيل الحضور بنجاح ويمكن إعادة مسحه الآن.", "warning");
-    focusScannerInput();
-  }
-
-  function storeLocally(record) {
-    const pending = getPendingScans();
-    pending.push(record);
-    savePendingScans(pending);
-  }
-
-  function syncPendingScans() {
-    const pending = getPendingScans();
-    if (pending.length === 0) return;
-
-    const syncBtn = document.getElementById('sync-btn');
-    syncBtn.innerText = "⏳ جاري الرفع إلى Google Sheets...";
-    syncBtn.disabled = true;
-
-    fetch(SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "syncBatch", scans: pending })
-    })
-    .then(res => res.json())
-    .then(res => {
-      if (res.success) {
-        savePendingScans([]);
-        alert("🎉 تم رفع كافة سجلات الحضور المعلقة بنجاح!");
-      } else {
-        alert("حدث خطأ أثناء الرفع: " + res.message);
-      }
-      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
-      syncBtn.disabled = false;
-      updateUI();
-    })
-    .catch(err => {
-      alert("❌ تعذر الرفع، يرجى التأكد من جودة الاتصال بالإنترنت.");
-      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
-      syncBtn.disabled = false;
-    });
-  }
-
-  function showCard(name, info, status, type, codeForUndo = null) {
-    const card = document.getElementById('student-card');
-    const undoContainer = document.getElementById('undo-container');
-    
-    document.getElementById('card-name').innerText = name;
-    document.getElementById('card-info').innerHTML = info;
-    document.getElementById('card-status').innerText = status;
-
-    if (type === 'success' && codeForUndo) {
-      undoContainer.innerHTML = `<button class="undo-btn" onclick="undoScan('${codeForUndo}')">↩️ تراجع عن التسجيل</button>`;
-    } else {
-      undoContainer.innerHTML = '';
-    }
-
-    card.className = "card-" + type;
-    card.style.display = "block";
-  }
-</script>
-
-</body>
-</html>
