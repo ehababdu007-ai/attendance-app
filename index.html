@@ -19,24 +19,29 @@
       background: #e2e8f0;
       padding: 8px 12px;
       border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 12px;
+      font-weight: 700;
       margin-bottom: 8px;
+      transition: background 0.3s;
     }
+    .status-bar.online-clean { background: #d1fae5; }
+    .status-bar.online-pending { background: #fef3c7; }
+    .status-bar.offline { background: #fee2e2; }
     .status-online { color: #059669; }
     .status-offline { color: #dc2626; }
+    .status-pending { color: #d97706; }
 
     .admin-buttons {
       display: flex;
       gap: 6px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
     .admin-btn {
       flex: 1;
       padding: 8px;
       border: none;
       border-radius: 8px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
       cursor: pointer;
       color: white;
@@ -45,6 +50,8 @@
     .admin-btn:hover { opacity: 0.85; }
     .btn-clear-today { background: #f59e0b; }
     .btn-hard-reset { background: #dc2626; }
+    .btn-diagnostics { background: #8b5cf6; }
+    .btn-view-pending { background: #0ea5e9; }
 
     .sync-btn {
       width: 100%;
@@ -58,9 +65,14 @@
       margin-bottom: 12px;
       display: none;
       transition: background 0.2s;
+      animation: pulseBlue 2s infinite;
+    }
+    @keyframes pulseBlue {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
+      50% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
     }
     .sync-btn:hover:not(:disabled) { background-color: #1d4ed8; }
-    .sync-btn:disabled { background-color: #94a3b8; cursor: not-allowed; }
+    .sync-btn:disabled { background-color: #94a3b8; cursor: not-allowed; animation: none; }
 
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .input-group { margin-bottom: 10px; position: relative; }
@@ -275,6 +287,69 @@
     .scanner-debug-entry { padding: 1px 0; }
     .scanner-debug-fast { color: #4ade80; }
     .scanner-debug-slow { color: #f87171; }
+
+    /* Modal للقوائم */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 10000;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .modal-overlay.visible { display: flex; align-items: flex-start; justify-content: center; }
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      max-width: 480px;
+      width: 100%;
+      padding: 20px;
+      margin-top: 40px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .modal-body {
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.6;
+    }
+    .modal-close {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px;
+      background: #64748b;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .pending-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .pending-item-name { font-weight: bold; color: #0f172a; }
+    .pending-item-meta { color: #64748b; font-size: 11px; margin-top: 2px; }
+    .pending-empty {
+      text-align: center;
+      padding: 20px;
+      color: #94a3b8;
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -282,14 +357,23 @@
 <div class="container">
   <h3 class="title">نظام تسجيل الحضور والاختبارات</h3>
 
-  <div class="status-bar">
+  <div class="status-bar" id="status-bar">
     <span id="net-status" class="status-online">🌐 متصل</span>
     <span id="pending-count">📋 معلق: 0</span>
   </div>
 
   <div class="admin-buttons">
+    <button onclick="showPendingList()" class="admin-btn btn-view-pending">
+      📋 عرض المعلقات
+    </button>
     <button onclick="clearTodayScans()" class="admin-btn btn-clear-today">
       🗑️ مسح سجلات اليوم
+    </button>
+  </div>
+
+  <div class="admin-buttons">
+    <button onclick="showDiagnostics()" class="admin-btn btn-diagnostics">
+      🔬 تشخيص البيانات
     </button>
     <button onclick="hardReset()" class="admin-btn btn-hard-reset">
       🔄 إعادة ضبط كاملة
@@ -406,6 +490,15 @@
   </div>
 </div>
 
+<!-- Modal للقوائم -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modal-title">عنوان</div>
+    <div class="modal-body" id="modal-body">محتوى</div>
+    <button class="modal-close" onclick="closeModal()">إغلاق</button>
+  </div>
+</div>
+
 <script>
   // ============================================================
   // ⚠️ رابط Google Apps Script الخاص بك
@@ -436,9 +529,11 @@
   let isScannerInput = false;
   let debugMode = false;
 
-  // للكاميرا
   let lastCameraScan = '';
   let lastCameraScanTime = 0;
+
+  let isSyncing = false;
+  let pendingRefreshTimer = null;
 
   // ============================================================
   // 🛡️ حماية التركيز
@@ -461,6 +556,7 @@
         if (!active || active === document.body ||
             (!INPUT_IDS.includes(active.id) &&
              !active.closest('.search-results-list') &&
+             !active.closest('.modal-content') &&
              active.tagName !== 'BUTTON' &&
              active.tagName !== 'SELECT')) {
           document.getElementById('manualCode').focus();
@@ -490,6 +586,22 @@
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
         osc.start();
         osc.stop(audioCtx.currentTime + 0.2);
+      } else if (type === 'network-fail') {
+        // نغمة مميزة لفشل الشبكة (نغمتان)
+        osc.frequency.value = 300;
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+        setTimeout(() => {
+          const osc2 = audioCtx.createOscillator();
+          const gain2 = audioCtx.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioCtx.destination);
+          osc2.frequency.value = 200;
+          gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          osc2.start();
+          osc2.stop(audioCtx.currentTime + 0.2);
+        }, 150);
       } else {
         osc.frequency.value = 250;
         gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
@@ -531,12 +643,22 @@
     updateDashboard();
     focusScannerInput();
 
-    window.addEventListener('online', updateUI);
-    window.addEventListener('offline', updateUI);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // 🚨 تحذير عند إغلاق مع وجود معلقات
+    window.addEventListener('beforeunload', function(e) {
+      const pending = getPendingScans();
+      if (pending.length > 0) {
+        e.preventDefault();
+        e.returnValue = "لديك " + pending.length + " سجل معلق لم يُرفع بعد!";
+        return e.returnValue;
+      }
+    });
 
     const manualInput = document.getElementById('manualCode');
 
-    // 🌐 مستمع عام للماسح (في أي مكان بالصفحة)
+    // 🌐 مستمع عام للماسح
     let globalBuffer = "";
     let globalBufferTimer = null;
     let globalLastTime = 0;
@@ -547,6 +669,7 @@
       globalLastTime = now;
 
       if (e.target === manualInput) return;
+      if (e.target.closest('.modal-content')) return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;
 
       if (diff < 50 || globalBuffer.length > 0) {
@@ -554,7 +677,6 @@
           globalBuffer += e.key;
           clearTimeout(globalBufferTimer);
 
-          // ⚡ معالجة فورية إذا كان الكود موجوداً
           if (studentsData[globalBuffer.trim()]) {
             finalizeScannerInput(globalBuffer.trim());
             globalBuffer = "";
@@ -573,7 +695,7 @@
       }
     });
 
-    // ⌨️ مستمع خانة البحث - نسخة مُسرَّعة
+    // ⌨️ مستمع خانة البحث
     manualInput.addEventListener('input', function(e) {
       const val = manualInput.value;
       const now = Date.now();
@@ -593,7 +715,6 @@
         updateModeIndicator('scanner');
         scannerBuffer = val;
 
-        // ⚡ معالجة فورية إذا كان الكود معروفاً
         const cleanVal = val.trim();
         if (studentsData[cleanVal]) {
           if (debugMode) logScannerDebug(`⚡ معالجة فورية: "${cleanVal}"`, 'fast');
@@ -602,7 +723,6 @@
           return;
         }
 
-        // ⏱️ إذا لم يكن معروفاً، انتظر 80ms فقط
         clearTimeout(scannerBufferTimer);
         scannerBufferTimer = setTimeout(() => {
           if (scannerBuffer.length >= 2) {
@@ -627,7 +747,6 @@
       }
     });
 
-    // ⌨️ Enter / Tab - معالجة فورية
     manualInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
@@ -647,14 +766,44 @@
   };
 
   // ============================================================
-  // 🎯 معالجة إدخال الماسح (بحث سريع)
+  // 🌐 معالجة حالة الاتصال
+  // ============================================================
+  function handleOnline() {
+    updateUI();
+    const pending = getPendingScans();
+    if (pending.length > 0) {
+      // 🔄 رفع تلقائي بعد 2 ثانية (لمنح الشبكة فرصة الاستقرار)
+      setTimeout(() => {
+        autoSync();
+      }, 2000);
+    }
+  }
+
+  function handleOffline() {
+    updateUI();
+    // إشعار بصري
+    const statusBar = document.getElementById('status-bar');
+    statusBar.classList.remove('online-clean', 'online-pending');
+    statusBar.classList.add('offline');
+  }
+
+  // ============================================================
+  // 🔄 مزامنة تلقائية
+  // ============================================================
+  function autoSync() {
+    const pending = getPendingScans();
+    if (pending.length === 0 || isSyncing || !navigator.onLine) return;
+    syncPendingScans();
+  }
+
+  // ============================================================
+  // 🎯 معالجة إدخال الماسح
   // ============================================================
   function finalizeScannerInput(code) {
     const cleanCode = String(code).trim();
     if (!cleanCode) return;
     if (debugMode) logScannerDebug(`🎯 معالجة: "${cleanCode}"`, 'fast');
 
-    // ⚡ المسار السريع: Map lookup
     if (studentsData[cleanCode]) {
       handleScan(cleanCode);
       document.getElementById('manualCode').value = '';
@@ -662,7 +811,6 @@
       return;
     }
 
-    // 🔍 مطابقة الكود
     const q = cleanCode.toLowerCase();
     const matched = studentsList.find(s =>
       String(s.code).toLowerCase() === q
@@ -694,7 +842,7 @@
   }
 
   // ============================================================
-  // 🕐 دالة مساعدة: الوقت الحالي
+  // 🕐 الوقت الحالي
   // ============================================================
   function getCurrentTimestamp() {
     const now = new Date();
@@ -947,17 +1095,29 @@
     const isOnline = navigator.onLine;
     const netStatus = document.getElementById('net-status');
     const syncBtn = document.getElementById('sync-btn');
+    const statusBar = document.getElementById('status-bar');
     const pending = getPendingScans();
 
     document.getElementById('pending-count').innerText = "📋 معلق: " + pending.length;
 
+    statusBar.classList.remove('online-clean', 'online-pending', 'offline');
+
     if (isOnline) {
-      netStatus.className = "status-online";
-      netStatus.innerText = "🌐 متصل";
-      syncBtn.style.display = pending.length > 0 ? "block" : "none";
+      if (pending.length > 0) {
+        netStatus.className = "status-pending";
+        netStatus.innerText = "🌐 متصل";
+        statusBar.classList.add('online-pending');
+        syncBtn.style.display = "block";
+      } else {
+        netStatus.className = "status-online";
+        netStatus.innerText = "🌐 متصل";
+        statusBar.classList.add('online-clean');
+        syncBtn.style.display = "none";
+      }
     } else {
       netStatus.className = "status-offline";
       netStatus.innerText = "📡 أوفلاين";
+      statusBar.classList.add('offline');
       syncBtn.style.display = "none";
     }
   }
@@ -966,8 +1126,8 @@
   // 📥 جلب الطلاب
   // ============================================================
   function fetchStudentsList() {
-    if (!navigator.onLine) return;
-    fetch(SCRIPT_URL + "?action=getStudents")
+    if (!navigator.onLine) return Promise.resolve();
+    return fetch(SCRIPT_URL + "?action=getStudents&t=" + Date.now())
       .then(res => res.json())
       .then(data => {
         if (data.success && data.students) {
@@ -977,11 +1137,17 @@
           studentsData = map;
           localStorage.setItem('cached_students', JSON.stringify(map));
           localStorage.setItem('cached_students_list', JSON.stringify(data.students));
+          localStorage.setItem('cached_students_time', Date.now().toString());
           buildFilterOptions();
           updateDashboard();
+          return data.students.length;
         }
+        return 0;
       })
-      .catch(err => console.log("تعذر تحديث الكشوفات:", err));
+      .catch(err => {
+        console.log("تعذر تحديث الكشوفات:", err);
+        return 0;
+      });
   }
 
   function loadCachedStudents() {
@@ -1026,16 +1192,67 @@
   }
 
   // ============================================================
-  // 📤 السجلات المعلقة
+  // 📤 السجلات المعلقة (مع فحص المساحة)
   // ============================================================
   function getPendingScans() {
-    const list = localStorage.getItem('pending_scans');
-    return list ? JSON.parse(list) : [];
+    try {
+      const list = localStorage.getItem('pending_scans');
+      return list ? JSON.parse(list) : [];
+    } catch (e) {
+      console.error("خطأ في قراءة المعلقات:", e);
+      return [];
+    }
   }
 
   function savePendingScans(scans) {
-    localStorage.setItem('pending_scans', JSON.stringify(scans));
-    updateUI();
+    try {
+      const serialized = JSON.stringify(scans);
+      const sizeKB = Math.round(serialized.length / 1024);
+
+      // 🚨 تحذير عند اقتراب الحد (5MB)
+      if (sizeKB > 4000) {
+        console.warn("⚠️ تحذير: التخزين قارب على الامتلاء (" + sizeKB + " KB)");
+        if (sizeKB > 4500) {
+          alert("🚨 تحذير عاجل!\n\nمساحة التخزين على وشك الامتلاء!\n" +
+                "الحجم الحالي: " + sizeKB + " KB\n" +
+                "الحد الأقصى: ~5000 KB\n\n" +
+                "الرجاء الرفع إلى Google Sheets فوراً!");
+        }
+      }
+
+      localStorage.setItem('pending_scans', serialized);
+      updateUI();
+      return true;
+    } catch (e) {
+      console.error("فشل حفظ المعلقات:", e);
+      if (e.name === 'QuotaExceededError') {
+        alert("🚨 خطأ حرج!\n\n" +
+              "مساحة التخزين ممتلئة!\n" +
+              "لا يمكن حفظ المزيد من السجلات.\n\n" +
+              "الحل:\n" +
+              "1. اتصل بالإنترنت\n" +
+              "2. اضغط 'رفع الآن'\n" +
+              "3. حاول مرة أخرى");
+      }
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 💾 حفظ فوري (قبل أي شيء)
+  // ============================================================
+  function storeLocallySafe(record) {
+    const pending = getPendingScans();
+    // تحقق من عدم التكرار
+    const exists = pending.some(item =>
+      item.code === record.code &&
+      item.sessionName === record.sessionName &&
+      item.timestamp === record.timestamp
+    );
+    if (exists) return true;
+
+    pending.push(record);
+    return savePendingScans(pending);
   }
 
   // ============================================================
@@ -1071,14 +1288,12 @@
   }
 
   function onScanSuccess(decodedText) {
-    // 🛡️ منع التسجيل المزدوج السريع
     const now = Date.now();
     if (decodedText === lastCameraScan && (now - lastCameraScanTime) < 800) {
       return;
     }
     lastCameraScan = decodedText;
     lastCameraScanTime = now;
-
     handleScan(decodedText);
   }
 
@@ -1113,7 +1328,7 @@
   }
 
   // ============================================================
-  // 🎯 معالجة المسح الرئيسية (Optimistic UI - عرض فوري)
+  // 🎯 معالجة المسح الرئيسية (حماية قصوى)
   // ============================================================
   function handleScan(code) {
     const cleanCode = String(code).trim();
@@ -1151,11 +1366,19 @@
     }
 
     // ============================================
-    // 🚀 الحالة العادية: عرض فوري + إرسال بالسيرفر
+    // 🔒 1. حفظ فوري (قبل أي شيء)
     // ============================================
-    // ⚡ 1. عرض فوري
-    playBeep('success');
     recordLocalScan(scanKey);
+    const scanRecord = {
+      code: cleanCode,
+      sessionName: session,
+      hallName: hall,
+      deviceInfo: device,
+      timestamp: timestamp
+    };
+
+    // ⚡ 2. عرض فوري
+    playBeep('success');
     showCard(
       "✅ " + student.name,
       "الصف: " + student.grade + " | المجموعة: " + student.group +
@@ -1165,15 +1388,7 @@
       cleanCode
     );
 
-    // ⚡ 2. إرسال في الخلفية
-    const scanRecord = {
-      code: cleanCode,
-      sessionName: session,
-      hallName: hall,
-      deviceInfo: device,
-      timestamp: timestamp
-    };
-
+    // ⚡ 3. إرسال للسيرفر
     if (navigator.onLine) {
       fetch(SCRIPT_URL, {
         method: "POST",
@@ -1202,24 +1417,30 @@
           );
         } else {
           if (debugMode) logScannerDebug(`❌ خطأ: ${res.message}`, 'slow');
-          playBeep('error');
-          showCard(
-            "❌ خطأ في التسجيل",
-            "الكود: " + student.code,
-            res.message || "حدث خطأ غير متوقع",
-            "error"
-          );
+          // خزّن محلياً (لم يُرفع)
+          storeLocallySafe(scanRecord);
         }
       })
       .catch(err => {
+        // 🌐 فشل الشبكة → خزّن محلياً
         if (debugMode) logScannerDebug(`🌐 فشل الشبكة - تخزين محلي`, 'slow');
-        storeLocally(scanRecord);
+        playBeep('network-fail');
+        const saved = storeLocallySafe(scanRecord);
+        if (saved) {
+          // أضف ملاحظة للبطاقة
+          const cardStatus = document.getElementById('card-status');
+          cardStatus.innerHTML += '<br>⚠️ لم يُرفع (سيُرفع لاحقاً)';
+        }
       });
     } else {
-      storeLocally(scanRecord);
+      // 📡 أوفلاين → خزّن محلياً
+      const saved = storeLocallySafe(scanRecord);
+      const cardStatus = document.getElementById('card-status');
+      if (saved) {
+        cardStatus.innerHTML += '<br>📡 سيُرفع عند عودة الإنترنت';
+      }
     }
 
-    // ⚡ 3. استقبل المسح التالي فوراً
     focusScannerInput();
   }
 
@@ -1252,25 +1473,33 @@
   }
 
   // ============================================================
-  // 💾 التخزين المحلي
-  // ============================================================
-  function storeLocally(record) {
-    const pending = getPendingScans();
-    pending.push(record);
-    savePendingScans(pending);
-  }
-
-  // ============================================================
-  // 🔄 المزامنة
+  // 🔄 المزامنة الذكية (رفع + سحب)
   // ============================================================
   function syncPendingScans() {
+    if (isSyncing) return;
     const pending = getPendingScans();
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      // لا يوجد معلقات، لكن يمكن أن نسحب قائمة محدثة
+      if (navigator.onLine) {
+        fetchStudentsList().then(() => {
+          updateUI();
+        });
+      }
+      return;
+    }
 
+    if (!navigator.onLine) {
+      alert("❌ لا يوجد إنترنت.\nالرجاء الاتصال بالشبكة أولاً.");
+      return;
+    }
+
+    isSyncing = true;
     const syncBtn = document.getElementById('sync-btn');
-    syncBtn.innerText = "⏳ جاري الرفع...";
+    const originalText = syncBtn.innerText;
+    syncBtn.innerText = "⏳ جاري الرفع (" + pending.length + " سجل)...";
     syncBtn.disabled = true;
 
+    // 🔄 الخطوة 1: رفع المعلقات
     fetch(SCRIPT_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -1279,19 +1508,36 @@
     .then(res => res.json())
     .then(res => {
       if (res.success) {
+        // ✅ الرفع نجح → امسح المعلقات
         savePendingScans([]);
-        alert("🎉 تم رفع كافة السجلات المعلقة بنجاح!");
+
+        // 🔄 الخطوة 2: سحب قائمة محدثة من الطلاب
+        syncBtn.innerText = "📥 جاري تحديث قائمة الطلاب...";
+        return fetchStudentsList();
       } else {
-        alert("حدث خطأ أثناء الرفع: " + res.message);
+        throw new Error(res.message || "فشل الرفع");
       }
-      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
-      syncBtn.disabled = false;
-      updateUI();
+    })
+    .then(() => {
+      // ✅ اكتملت المزامنة
+      syncBtn.innerText = "✅ تمت المزامنة بنجاح";
+      playBeep('success');
+
+      setTimeout(() => {
+        syncBtn.innerText = originalText;
+        syncBtn.disabled = false;
+        isSyncing = false;
+        updateUI();
+        updateDashboard();
+      }, 1500);
     })
     .catch(err => {
-      alert("❌ تعذر الرفع، يرجى التأكد من جودة الاتصال بالإنترنت.");
-      syncBtn.innerText = "🔄 رفع الحضور المخزن إلى Google Sheets";
+      console.error("خطأ في المزامنة:", err);
+      alert("❌ تعذر إكمال المزامنة\n\n" + (err.message || "خطأ غير معروف") + 
+            "\n\nالسجلات المعلقة محفوظة بأمان، حاول مرة أخرى.");
+      syncBtn.innerText = originalText;
       syncBtn.disabled = false;
+      isSyncing = false;
     });
   }
 
@@ -1315,8 +1561,7 @@
 
     playBeep('success');
     alert("✅ تم مسح سجلات اليوم محلياً.\n\n" +
-          "📌 ملاحظة: Google Sheets لم يتأثر.\n" +
-          "📌 إذا حاولت تسجيل نفس الطالب مرة أخرى، السيرفر سيرفض إذا كان مسجلاً في الشيت.");
+          "📌 ملاحظة: Google Sheets لم يتأثر.");
     focusScannerInput();
   }
 
@@ -1338,17 +1583,149 @@
       "• سجلات اليوم\n" +
       "• الكاش (قائمة الطلاب)\n" +
       "• الفلاتر المحفوظة\n" +
-      "• الإعدادات المحفوظة\n\n" +
-      "📌 Google Sheets لن يتأثر إطلاقاً." +
+      "• الإعدادات المحفوظة" +
       warnPending +
-      "\n\nهل أنت متأكد؟"
+      "\n\n📌 Google Sheets لن يتأثر.\n\n" +
+      "هل أنت متأكد؟"
     )) return;
 
-    if (!confirm("🚨 تأكيد أخير!\n\nهل تريد فعلاً إعادة الضبط؟")) return;
+    // تحذير إضافي إذا كان هناك معلقات
+    if (pending.length > 0) {
+      if (!confirm(
+        "🚨🚨 تأكيد أخير 🚨🚨\n\n" +
+        "لا تزال لديك " + pending.length + " سجل معلق!\n" +
+        "إذا واصلت، ستُفقد نهائياً!\n\n" +
+        "هل رفعت السجلات مسبقاً؟"
+      )) return;
+    } else {
+      if (!confirm("🚨 تأكيد أخير!\n\nهل تريد فعلاً إعادة الضبط؟")) return;
+    }
 
     localStorage.clear();
     alert("✅ تم إعادة الضبط الكامل.\nسيُعاد تحميل الصفحة الآن...");
     location.reload();
+  }
+
+  // ============================================================
+  // 📋 Modal للقوائم
+  // ============================================================
+  function openModal(title, contentHTML) {
+    document.getElementById('modal-title').innerText = title;
+    document.getElementById('modal-body').innerHTML = contentHTML;
+    document.getElementById('modal-overlay').classList.add('visible');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('visible');
+    focusScannerInput();
+  }
+
+  // ============================================================
+  // 📋 عرض قائمة السجلات المعلقة
+  // ============================================================
+  function showPendingList() {
+    const pending = getPendingScans();
+
+    if (pending.length === 0) {
+      openModal('📋 السجلات المعلقة',
+        '<div class="pending-empty">' +
+        '✅ لا يوجد سجلات معلقة<br>' +
+        '<small>كل السجلات مرفوعة إلى Google Sheets</small>' +
+        '</div>'
+      );
+      return;
+    }
+
+    let html = '<div style="text-align:center;margin-bottom:10px;padding:8px;background:#fef3c7;border-radius:8px;color:#92400e;font-weight:700;">';
+    html += '⚠️ ' + pending.length + ' سجل بانتظار الرفع';
+    html += '</div>';
+
+    pending.forEach((item, idx) => {
+      const student = studentsData[item.code];
+      const name = student ? student.name : 'كود: ' + item.code;
+      html += `
+        <div class="pending-item">
+          <div class="pending-item-name">${idx + 1}. ${escapeHtml(name)}</div>
+          <div class="pending-item-meta">
+            📚 ${escapeHtml(item.sessionName)} | 🕐 ${escapeHtml(item.timestamp)}
+          </div>
+        </div>
+      `;
+    });
+
+    html += '<div style="text-align:center;margin-top:12px;font-size:11px;color:#64748b;">';
+    html += '💾 محفوظة بأمان في ذاكرة الجهاز';
+    html += '</div>';
+
+    openModal('📋 السجلات المعلقة', html);
+  }
+
+  // ============================================================
+  // 🔬 تشخيص البيانات
+  // ============================================================
+  function showDiagnostics() {
+    const pending = getPendingScans();
+    const todayKey = 'scanned_' + new Date().toISOString().slice(0, 10);
+    const todayScans = JSON.parse(localStorage.getItem(todayKey) || '[]');
+    const keys = Object.keys(localStorage);
+    const totalSizeKB = Math.round(JSON.stringify(localStorage).length / 1024);
+    const cachedStudents = JSON.parse(localStorage.getItem('cached_students_list') || '[]');
+    const lastUpdate = localStorage.getItem('cached_students_time');
+
+    let lastUpdateStr = 'لم يتم';
+    if (lastUpdate) {
+      const d = new Date(parseInt(lastUpdate));
+      lastUpdateStr = d.toLocaleString('ar-EG');
+    }
+
+    // حساب النسبة من الحد الأقصى (5MB)
+    const maxKB = 5000;
+    const percent = Math.round(totalSizeKB / maxKB * 100);
+    let color = '#059669';
+    if (percent > 50) color = '#f59e0b';
+    if (percent > 80) color = '#dc2626';
+
+    let html = `
+      <div style="display:grid;gap:8px;">
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:#0d9488;margin-bottom:4px;">📋 السجلات المعلقة</div>
+          <div style="font-size:20px;font-weight:900;">${pending.length}</div>
+        </div>
+        
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:#0d9488;margin-bottom:4px;">📅 سجلات اليوم</div>
+          <div style="font-size:20px;font-weight:900;">${todayScans.length}</div>
+        </div>
+        
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:#0d9488;margin-bottom:4px;">👥 الطلاب المخزنون</div>
+          <div style="font-size:20px;font-weight:900;">${cachedStudents.length}</div>
+        </div>
+        
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:#0d9488;margin-bottom:4px;">🕐 آخر تحديث للطلاب</div>
+          <div style="font-size:12px;">${lastUpdateStr}</div>
+        </div>
+        
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:${color};margin-bottom:4px;">💾 مساحة التخزين</div>
+          <div style="font-size:14px;font-weight:700;">${totalSizeKB} KB / ${maxKB} KB</div>
+          <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:4px;">
+            <div style="height:100%;width:${percent}%;background:${color};border-radius:4px;transition:width 0.3s;"></div>
+          </div>
+          <div style="font-size:11px;color:${color};margin-top:2px;">${percent}% مستخدم</div>
+        </div>
+        
+        <div style="background:#f8fafc;padding:10px;border-radius:8px;">
+          <div style="font-weight:700;color:#0d9488;margin-bottom:4px;">🔑 المفاتيح المحفوظة</div>
+          <div style="font-size:11px;font-family:monospace;direction:ltr;text-align:left;">
+            ${keys.map(k => '• ' + k).join('<br>')}
+          </div>
+        </div>
+      </div>
+    `;
+
+    openModal('🔬 تشخيص البيانات', html);
   }
 
   // ============================================================
